@@ -19,8 +19,20 @@ file in your repository, never in the server code.
 ## Requirements
 
 - Node.js 24 or newer
-- A System One endpoint serving the models, e.g. a local Ollama with
-  `ollama pull clef` and `ollama pull clef-flash`
+- A System One endpoint serving a decision model (see [Models](#models))
+
+## Models
+
+The server works with any model served behind the System One protocol. Pick one model for
+`SYSTEMONE_MODEL` and, optionally, a smaller or faster one for `SYSTEMONE_FAST_MODEL`.
+
+| Model | Where | Setup |
+|---|---|---|
+| [`clef`](https://ollama.com/library/clef), [`clef-flash`](https://ollama.com/library/clef-flash) | Ollama library | `ollama pull clef` and `ollama pull clef-flash` (the defaults) |
+| [`nimble`](https://ollama.com/library/nimble) | Ollama library | `ollama pull nimble`, then e.g. `SYSTEMONE_FAST_MODEL=nimble` |
+| `jev` | not on Ollama | serve it with llama.cpp or another System One-compatible server, then point `SYSTEMONE_BASE_URL` / `SYSTEMONE_PATH` at it and set `SYSTEMONE_MODEL=jev` |
+
+Hosted Ollama also serves the Ollama-library models (see [Hosted Ollama](#hosted-ollama)).
 
 ## Install
 
