@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-13
+
+### Security
+
+- `check` now asks the base `risk` question in its own System One request, separate from
+  the risk-rule questions. Rule descriptions from `.systemone.json` or from the calling
+  agent can no longer influence the base rating; they can only raise `final_risk`. With
+  rules configured, `check` makes two parallel requests instead of one.
+
+### Added
+
+- README: list of compatible models (`clef`, `clef-flash`, `nimble`, `jev`).
+
 ## [1.0.0] - 2026-11-13
 
 First public release.
