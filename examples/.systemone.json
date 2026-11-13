@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "invariants": {
+    "api-compat": "Public REST endpoints keep backward-compatible request and response shapes",
+    "migrations-reversible": "Every database migration ships with a working down migration"
+  },
+  "workflows": {
+    "build": "New feature, component, or functionality to create",
+    "bugfix": "Fix a defect, failing test, or unexpected behavior",
+    "refactor": "Restructure existing code without changing behavior",
+    "release": "Prepare, tag, or publish a release"
+  },
+  "risk_rules": {
+    "prod-db": { "description": "Connects to or modifies the production database", "level": "dangerous" },
+    "lockfile": { "description": "Rewrites package-lock.json or another dependency lockfile", "level": "needs_confirm" }
+  }
+}
