@@ -36,7 +36,8 @@ npm run smoke     # live calls to the configured endpoint — only when asked; c
 
 - **Risk only goes up.** `final_risk` is the maximum of the base `risk` answer and every
   triggered rule. Nothing from `.systemone.json` or a tool argument may lower it or reword
-  the base `risk` question.
+  the base `risk` question, and the base question is always sent in its own request with
+  no rule text in it.
 - **Fail closed.** A missing or malformed answer counts as the risky case (`dangerous`
   base, triggered rule, touched invariant).
 - **No silent fallback.** An invalid or missing config (including a missing

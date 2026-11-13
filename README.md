@@ -180,10 +180,11 @@ and the limits apply to the combined set.
 
 ### Risk rules only raise risk
 
-`check` always asks the fixed base `risk` question. Each rule adds one yes/no question;
+`check` always asks the fixed base `risk` question, in its own request that never contains
+rule text. Each rule is one yes/no question, asked in a second, parallel request;
 `final_risk` is the highest of the base rating and the `level` of every rule answered
-"yes" with P ≥ 0.5 (`safe < needs_confirm < dangerous`). A matching rule can only make
-the final rating riskier, never safer. If the model's reply is missing an answer, `check`
+"yes" with P ≥ 0.5 (`safe < needs_confirm < dangerous`). A repository or an agent can make
+a command look riskier, never safer. If the model's reply is missing an answer, `check`
 treats it as the risky case.
 
 ## Development

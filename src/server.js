@@ -19,7 +19,7 @@ import {
 import { readSettings } from "./settings.js";
 
 export const SERVER_NAME = "systemone";
-export const SERVER_VERSION = "1.0.0";
+export const SERVER_VERSION = "1.0.1";
 
 const questionsSchema = z.record(
   z.string().min(1),
@@ -69,6 +69,11 @@ function validateDecideQuestions(questions) {
       throw new Error(`invalid question ${key}: score criteria must be an array of 2-10 descriptions ordered lowest to highest`);
     }
   }
+}
+
+/** Keep only the answers to questions this request asked; anything else is ignored. */
+function pickAnswers(answers, keys) {
+  return Object.fromEntries(keys.filter((key) => key in answers).map((key) => [key, answers[key]]));
 }
 
 function textResult(text) {
@@ -177,7 +182,15 @@ export function createServer({ env = process.env, cwd = process.cwd() } = {}) {
       if (extra !== undefined) {
         state.context = extra;
       }
-      const answers = await askSystemOne(settings, settings.fastModel, state, buildCheckQuestions(active));
+      // The base risk question goes in its own request so rule text from the project file or
+      // the caller can never influence it; rules can then only raise the final rating.
+      const { risk: baseQuestion, ...ruleQuestions } = buildCheckQuestions(active);
+      const ruleKeys = Object.keys(ruleQuestions);
+      const [baseAnswers, ruleAnswers] = await Promise.all([
+        askSystemOne(settings, settings.fastModel, state, { risk: baseQuestion }),
+        ruleKeys.length > 0 ? askSystemOne(settings, settings.fastModel, state, ruleQuestions) : {},
+      ]);
+      const answers = { ...pickAnswers(baseAnswers, ["risk"]), ...pickAnswers(ruleAnswers, ruleKeys) };
       const computed = { final_risk: computeFinalRisk(answers, active) };
       return textResult(formatAnswers(answers, { computed, configPath: project.path }));
     },
