@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-13
+
+### Fixed
+
+- `check`: caller `risk_rules` entries with unknown keys are rejected, like in
+  `.systemone.json`, instead of being silently dropped.
+- A `.systemone.json` deleted between discovery and loading now falls through to the next
+  discovery location instead of failing with a raw `ENOENT`; a vanished `SYSTEMONE_CONFIG`
+  target reports that the file does not exist.
+- MCP roots are fetched once and cached until the client sends `roots/list_changed`,
+  instead of on every tool call.
+
 ## [1.0.1] - 2026-11-13
 
 ### Security

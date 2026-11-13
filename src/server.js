@@ -20,7 +20,7 @@ import {
 import { readSettings } from "./settings.js";
 
 export const SERVER_NAME = "systemone";
-export const SERVER_VERSION = "1.0.1";
+export const SERVER_VERSION = "1.0.2";
 
 const questionsSchema = z.record(
   z.string().min(1),
