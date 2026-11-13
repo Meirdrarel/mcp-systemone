@@ -32,7 +32,7 @@ The server works with any model served behind the System One protocol. Pick one 
 | [`nimble`](https://ollama.com/library/nimble) | Ollama library | `ollama pull nimble`, then e.g. `SYSTEMONE_FAST_MODEL=nimble` |
 | `jev` | not on Ollama | serve it with llama.cpp or another System One-compatible server, then point `SYSTEMONE_BASE_URL` / `SYSTEMONE_PATH` at it and set `SYSTEMONE_MODEL=jev` |
 
-Hosted Ollama also serves the Ollama-library models (see [Hosted Ollama](#hosted-ollama)).
+To use a hosted endpoint instead of a local server, see [Hosted Ollama](#hosted-ollama).
 
 ## Install
 
