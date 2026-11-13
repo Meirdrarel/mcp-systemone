@@ -2,6 +2,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import { askSystemOne } from "./client.js";
@@ -38,10 +39,12 @@ const invariantsSchema = z
 
 const riskRulesSchema = z
   .record(
-    z.object({
-      description: z.string(),
-      level: z.enum(["needs_confirm", "dangerous"]),
-    }),
+    z
+      .object({
+        description: z.string(),
+        level: z.enum(["needs_confirm", "dangerous"]),
+      })
+      .strict(),
   )
   .describe(
     "Extra risk rules for this call, added to the project's .systemone.json: {\"id\": {\"description\": \"...\", \"level\": \"needs_confirm\"|\"dangerous\"}}. Rules can only raise the risk.",
@@ -87,15 +90,26 @@ function textResult(text) {
 export function createServer({ env = process.env, cwd = process.cwd() } = {}) {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
 
+  // Roots are listed once and cached until the client sends roots/list_changed.
+  // A failed listing is not cached, so the next call retries.
+  let cachedRoots = null;
+  server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+    cachedRoots = null;
+  });
+
   async function clientRoots() {
     if (!server.server.getClientCapabilities()?.roots) {
       return [];
     }
+    if (cachedRoots) {
+      return cachedRoots;
+    }
     try {
       const { roots } = await server.server.listRoots();
-      return roots
+      cachedRoots = roots
         .filter((root) => root.uri.startsWith("file://"))
         .map((root) => fileURLToPath(root.uri));
+      return cachedRoots;
     } catch {
       return [];
     }

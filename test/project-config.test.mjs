@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { mock, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -233,4 +233,46 @@ test("the shipped example config is valid", () => {
   assert.equal(Object.keys(cfg.invariants).length, 2);
   assert.deepEqual(Object.keys(cfg.workflows), ["build", "bugfix", "refactor", "release", "other"]);
   assert.equal(Object.keys(cfg.riskRules).length, 2);
+});
+
+test("a config deleted between discovery and load falls through to the next candidate", () => {
+  const dir = tmpDir();
+  fs.mkdirSync(path.join(dir, ".git"));
+  const cwdConfig = writeConfig(dir, { version: 1, workflows: { fromcwd: "C" } });
+  const root = path.join(dir, "root");
+  const rootConfig = writeConfig(root, { version: 1, workflows: { fromroot: "R" } });
+  const realRead = fs.readFileSync;
+  // Simulate the root config disappearing after it was found (stat succeeded, read fails).
+  const read = mock.method(fs, "readFileSync", (file, ...rest) => {
+    if (file === rootConfig) {
+      throw Object.assign(new Error(`ENOENT: no such file or directory, open '${file}'`), { code: "ENOENT" });
+    }
+    return realRead.call(fs, file, ...rest);
+  });
+  try {
+    const cfg = resolveProjectConfig({ env: {}, roots: [root], cwd: dir });
+    assert.equal(cfg.path, cwdConfig);
+  } finally {
+    read.mock.restore();
+  }
+});
+
+test("a SYSTEMONE_CONFIG file deleted before load gives the does-not-exist error", () => {
+  const dir = tmpDir();
+  const explicit = writeConfig(dir, MINIMAL);
+  const realRead = fs.readFileSync;
+  const read = mock.method(fs, "readFileSync", (file, ...rest) => {
+    if (file === explicit) {
+      throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    }
+    return realRead.call(fs, file, ...rest);
+  });
+  try {
+    assert.throws(
+      () => resolveProjectConfig({ env: { SYSTEMONE_CONFIG: explicit }, roots: [], cwd: dir }),
+      /SYSTEMONE_CONFIG points to .* which does not exist/,
+    );
+  } finally {
+    read.mock.restore();
+  }
 });

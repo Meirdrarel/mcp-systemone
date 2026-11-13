@@ -42,12 +42,14 @@ async function withClient({ answers = DEFAULT_ANSWERS, config, roots, env = {}, 
   });
   const client = new Client(
     { name: "test", version: "1.0.0" },
-    roots ? { capabilities: { roots: {} } } : {},
+    roots ? { capabilities: { roots: { listChanged: true } } } : {},
   );
+  client.listRootsCalls = 0;
   if (roots) {
-    client.setRequestHandler(ListRootsRequestSchema, async () => ({
-      roots: roots.map((dir) => ({ uri: pathToFileURL(dir).href })),
-    }));
+    client.setRequestHandler(ListRootsRequestSchema, async () => {
+      client.listRootsCalls += 1;
+      return { roots: roots.map((dir) => ({ uri: pathToFileURL(dir).href })) };
+    });
   }
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   try {
@@ -322,5 +324,33 @@ test("check fails when the rule request fails", async () => {
   await withClient({ config, status: 500 }, async (client) => {
     const result = await client.callTool({ name: "check", arguments: { command: "x" } });
     assert.ok(result.isError);
+  });
+});
+
+test("caller risk rules with unknown keys are rejected", async () => {
+  await withClient({}, async (client, mock) => {
+    const result = await client.callTool({
+      name: "check",
+      arguments: {
+        command: "x",
+        risk_rules: { p: { description: "P", level: "dangerous", severity: "high" } },
+      },
+    });
+    assert.ok(result.isError);
+    assert.match(textOf(result), /severity/);
+    assert.equal(mock.requests.length, 0);
+  });
+});
+
+test("MCP roots are listed once and re-listed after roots/list_changed", async () => {
+  const rootDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "systemone-root-")));
+  await withClient({ roots: [rootDir] }, async (client) => {
+    await client.callTool({ name: "route", arguments: { request: "x" } });
+    await client.callTool({ name: "route", arguments: { request: "y" } });
+    assert.equal(client.listRootsCalls, 1);
+    await client.sendRootsListChanged();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await client.callTool({ name: "route", arguments: { request: "z" } });
+    assert.equal(client.listRootsCalls, 2);
   });
 });

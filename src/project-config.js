@@ -136,45 +136,71 @@ function findGitRoot(start) {
   }
 }
 
-/**
- * Find the project config: SYSTEMONE_CONFIG, then MCP roots in order, then cwd up to the git root
- * (cwd only outside a git repo). Returns an absolute path or null.
- */
-export function findConfigPath({ env = process.env, roots = [], cwd = process.cwd() } = {}) {
+function explicitConfigPath(env, cwd) {
   const explicit = env.SYSTEMONE_CONFIG?.trim();
-  if (explicit) {
-    const abs = path.resolve(cwd, explicit);
-    if (!isFile(abs)) {
-      throw new Error(`SYSTEMONE_CONFIG points to ${abs} which does not exist`);
-    }
-    return abs;
-  }
-  for (const root of roots) {
-    const candidate = path.join(root, CONFIG_FILENAME);
-    if (isFile(candidate)) {
-      return candidate;
-    }
-  }
+  return explicit ? path.resolve(cwd, explicit) : null;
+}
+
+function missingExplicit(abs) {
+  return new Error(`SYSTEMONE_CONFIG points to ${abs} which does not exist`);
+}
+
+/** Candidate config paths in discovery order: MCP roots, then cwd up to the git root (cwd only outside git). */
+function discoveryCandidates(roots, cwd) {
+  const candidates = roots.map((root) => path.join(root, CONFIG_FILENAME));
   const start = path.resolve(cwd);
   const gitRoot = findGitRoot(start);
   let dir = start;
   for (;;) {
-    const candidate = path.join(dir, CONFIG_FILENAME);
-    if (isFile(candidate)) {
-      return candidate;
-    }
+    candidates.push(path.join(dir, CONFIG_FILENAME));
     if (gitRoot === null || dir === gitRoot) {
-      return null;
+      return candidates;
     }
     dir = path.dirname(dir);
   }
 }
 
-/** Discover and load the active project config; all fields null when there is none. */
-export function resolveProjectConfig({ env = process.env, roots = [], cwd = process.cwd() } = {}) {
-  const file = findConfigPath({ env, roots, cwd });
-  if (file === null) {
-    return { path: null, invariants: null, workflows: null, riskRules: null };
+/**
+ * Find the project config: SYSTEMONE_CONFIG, then MCP roots in order, then cwd up to the git root
+ * (cwd only outside a git repo). Returns an absolute path or null.
+ */
+export function findConfigPath({ env = process.env, roots = [], cwd = process.cwd() } = {}) {
+  const explicit = explicitConfigPath(env, cwd);
+  if (explicit) {
+    if (!isFile(explicit)) {
+      throw missingExplicit(explicit);
+    }
+    return explicit;
   }
-  return loadProjectConfig(file);
+  return discoveryCandidates(roots, cwd).find(isFile) ?? null;
+}
+
+const NO_CONFIG = Object.freeze({ path: null, invariants: null, workflows: null, riskRules: null });
+
+/**
+ * Discover and load the active project config; all fields null when there is none.
+ * A discovered file that disappears before it is read falls through to the next candidate.
+ */
+export function resolveProjectConfig({ env = process.env, roots = [], cwd = process.cwd() } = {}) {
+  const explicit = explicitConfigPath(env, cwd);
+  if (explicit) {
+    try {
+      return loadProjectConfig(explicit);
+    } catch (error) {
+      throw error.code === "ENOENT" ? missingExplicit(explicit) : error;
+    }
+  }
+  for (const candidate of discoveryCandidates(roots, cwd)) {
+    if (!isFile(candidate)) {
+      continue;
+    }
+    try {
+      return loadProjectConfig(candidate);
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+  return { ...NO_CONFIG };
 }
