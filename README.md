@@ -289,11 +289,19 @@ npm run smoke     # live calls against the configured endpoint; costs tokens
 
 ### Releasing
 
-1. Move the `Unreleased` changelog entries under a new version heading and commit
-   (`npm version` refuses to run with uncommitted changes).
-2. `npm version <patch|minor|major>` (bumps `package.json`, commits and tags `vX.Y.Z`).
-3. `git push --follow-tags`. The `Release` workflow runs the tests and publishes to npm
-   through trusted publishing, with provenance.
+A release is one commit and one annotated tag on `main`:
+
+1. On an up-to-date `main` with a clean tree, add a `## [X.Y.Z] - YYYY-MM-DD` heading right
+   under `## [Unreleased]`, so the unreleased entries move under it and `Unreleased` is empty.
+2. `npm version <patch|minor|major> --no-git-tag-version` bumps `package.json` and
+   `package-lock.json` without committing or tagging.
+3. `npm test`, then commit `CHANGELOG.md`, `package.json` and `package-lock.json` as
+   `chore: release X.Y.Z`.
+4. `git tag -a vX.Y.Z -m vX.Y.Z`, then `git push origin main vX.Y.Z`.
+
+The `Release` workflow checks that the tag matches `package.json`, runs the tests and
+publishes to npm through trusted publishing, with provenance. The new version can take a few
+minutes to appear on npm after the workflow succeeds.
 
 ## Contributing
 
