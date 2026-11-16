@@ -15,9 +15,9 @@ const PINNED_RISK = {
   type: "choice",
   instructions: "Rate the risk of running this shell command in a development repository.",
   criteria: {
-    safe: "Read-only or trivially reversible: ls, git status, builds, tests",
+    safe: "Read-only or trivially reversible, and local only: ls, git status, builds, tests",
     needs_confirm:
-      "Mutates files, git history, or settings in recoverable ways: edits, commits, branch switches, installs, pushing a new or feature branch",
+      "Mutates files, git history, or settings in recoverable ways: edits, commits, branch switches, installs, pushing to a new or existing feature branch",
     dangerous:
       "Destructive or hard to reverse: rm -rf, force push, push to the default or a protected branch, deleting remote branches or tags, sudo, dropping databases, publishing a release or package",
   },

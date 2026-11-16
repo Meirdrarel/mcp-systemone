@@ -15,11 +15,12 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 
 - `check`: the base `risk` criteria now separate levels by reversibility instead of "affects
-  shared or remote state". Pushing a new or feature branch is listed under `needs_confirm`;
-  `dangerous` names force pushes, pushes to the default or a protected branch, deleting
-  remote branches or tags, and publishing a release or package. Ordinary feature-branch
-  pushes are now expected to rate `needs_confirm` rather than lean `dangerous`. Unknown
-  answers still count as `dangerous`, and rules can still only raise the rating.
+  shared or remote state". `safe` is limited to local commands; pushing to a new or existing
+  feature branch is listed under `needs_confirm`; `dangerous` names force pushes, pushes to
+  the default or a protected branch, deleting remote branches or tags, and publishing a
+  release or package. Feature-branch pushes are now expected to rate `needs_confirm`, where
+  they used to lean `dangerous` (new branch) or rate `safe` (existing branch). Unknown answers
+  still count as `dangerous`, and rules can still only raise the rating.
 - `gate`: with `kind: "diff"` or `"mr"`, the `ready` and `verdict` questions ask whether the
   change is ready to merge instead of whether a plan is ready to implement.
 
