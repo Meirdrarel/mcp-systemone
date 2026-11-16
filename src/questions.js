@@ -137,9 +137,9 @@ export function buildCheckQuestions(riskRules = {}) {
       criteria: {
         safe: "Read-only or trivially reversible: ls, git status, builds, tests",
         needs_confirm:
-          "Mutates files, git history, or settings in recoverable ways: edits, commits, branch switches, installs",
+          "Mutates files, git history, or settings in recoverable ways: edits, commits, branch switches, installs, pushing a new or feature branch",
         dangerous:
-          "Destructive, hard to reverse, or affects shared or remote state: rm -rf, force push, sudo, dropping databases, publishing",
+          "Destructive or hard to reverse: rm -rf, force push, push to the default or a protected branch, deleting remote branches or tags, sudo, dropping databases, publishing a release or package",
       },
     },
   };

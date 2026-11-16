@@ -197,6 +197,12 @@ rule text. Each rule is one yes/no question, asked in a second, parallel request
 a command look riskier, never safer. If the model's reply is missing an answer, `check`
 treats it as the risky case.
 
+The base levels follow reversibility, not whether a command touches a remote: pushing a new
+or feature branch is `needs_confirm`; force pushes, pushes to the default or a protected
+branch, deleting remote branches or tags, and publishing a release or package are
+`dangerous`. The model only sees the command and its context, so a bare `git push` on the
+default branch is judged by what they say; add a risk rule to cover it.
+
 The first line names the rules involved: `raised by` lists the rules that set `final_risk`
 above the base rating, and `matched` lists every rule answered "yes", including those at or
 below the base, e.g. `final_risk: dangerous (matched: shared-branch)`. The JSON has the same
