@@ -70,6 +70,48 @@ test("gate without invariants has only ready and verdict", () => {
   });
 });
 
+const MERGE_READY = {
+  type: "noul",
+  instructions:
+    "Is this change complete and ready to merge (no missing pieces, leftovers or unrelated changes)?",
+  criteria: {
+    false: "Pieces are missing, or it has leftovers or unrelated changes",
+    true: "The change is complete and ready to merge",
+  },
+};
+
+const MERGE_VERDICT = {
+  type: "choice",
+  instructions: "What is the overall verdict on this change?",
+  criteria: {
+    approve: "Correct and ready to merge",
+    changes: "Mergeable after specific fixes",
+    reject: "Wrong approach or breaks behavior",
+  },
+};
+
+test("gate asks about merging for a diff or merge request", () => {
+  for (const kind of ["diff", "mr"]) {
+    const q = buildGateQuestions({}, kind);
+    assert.deepEqual(q.ready, MERGE_READY, kind);
+    assert.deepEqual(q.verdict, MERGE_VERDICT, kind);
+  }
+});
+
+test("gate asks about implementing for a plan, a design or no kind", () => {
+  const planQuestions = buildGateQuestions();
+  for (const kind of ["plan", "design", undefined]) {
+    const q = buildGateQuestions({}, kind);
+    assert.deepEqual(q.ready, planQuestions.ready, String(kind));
+    assert.deepEqual(q.verdict, planQuestions.verdict, String(kind));
+  }
+  assert.match(planQuestions.ready.instructions, /concrete enough to implement/);
+});
+
+test("gate keeps invariant questions for every kind", () => {
+  assert.deepEqual(Object.keys(buildGateQuestions({ a: "A" }, "diff")), ["ready", "verdict", "invariant.a"]);
+});
+
 test("gate adds one noul per invariant", () => {
   const q = buildGateQuestions({ a: "A" });
   assert.deepEqual(Object.keys(q), ["ready", "verdict", "invariant.a"]);

@@ -12,6 +12,11 @@ All notable changes to this project are documented here. The format follows
   including rules that did not raise the rating because the base was already at their
   level. The first line shows them, e.g. `final_risk: dangerous (matched: shared-branch)`.
 
+### Changed
+
+- `gate`: with `kind: "diff"` or `"mr"`, the `ready` and `verdict` questions ask whether the
+  change is ready to merge instead of whether a plan is ready to implement.
+
 ## [1.0.3] - 2026-11-16
 
 ### Added

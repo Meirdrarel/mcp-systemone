@@ -146,6 +146,19 @@ test("gate without invariants omits touches_invariants", async () => {
   });
 });
 
+test("gate words its questions by kind", async () => {
+  const answers = { ready: { type: "noul", noul: 0.8 }, verdict: { type: "choice", choice: "approve" } };
+  await withClient({ answers }, async (client, mock) => {
+    await client.callTool({ name: "gate", arguments: { artifact: "diff --git a/x b/x", kind: "diff" } });
+    await client.callTool({ name: "gate", arguments: { artifact: "plan", kind: "plan" } });
+    const [diff, plan] = mock.requests.map((r) => r.body);
+    assert.equal(diff.state.kind, "diff");
+    assert.match(diff.questions.ready.instructions, /ready to merge/);
+    assert.equal(diff.questions.verdict.criteria.approve, "Correct and ready to merge");
+    assert.match(plan.questions.ready.instructions, /concrete enough to implement/);
+  });
+});
+
 test("gate rejects a caller id colliding with the project", async () => {
   await withClient({ config: { version: 1, invariants: { a: "A" } } }, async (client, mock) => {
     const result = await client.callTool({

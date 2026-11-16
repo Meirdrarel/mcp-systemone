@@ -66,27 +66,55 @@ export function buildRouteQuestions(workflows = DEFAULT_WORKFLOWS) {
   };
 }
 
-export function buildGateQuestions(invariants = {}) {
-  const questions = {
-    ready: {
-      type: "noul",
-      instructions:
-        "Is this plan or design concrete enough to implement without guessing at requirements?",
-      criteria: {
-        false: "Requirements are missing or vague",
-        true: "The plan is complete and unambiguous",
-      },
+const IMPLEMENT_GATE = {
+  ready: {
+    type: "noul",
+    instructions:
+      "Is this plan or design concrete enough to implement without guessing at requirements?",
+    criteria: {
+      false: "Requirements are missing or vague",
+      true: "The plan is complete and unambiguous",
     },
-    verdict: {
-      type: "choice",
-      instructions: "What is the overall verdict on this plan or design?",
-      criteria: {
-        approve: "Complete, consistent, ready to implement",
-        changes: "Usable but needs specific corrections first",
-        reject: "Fundamentally flawed or missing critical information",
-      },
+  },
+  verdict: {
+    type: "choice",
+    instructions: "What is the overall verdict on this plan or design?",
+    criteria: {
+      approve: "Complete, consistent, ready to implement",
+      changes: "Usable but needs specific corrections first",
+      reject: "Fundamentally flawed or missing critical information",
     },
-  };
+  },
+};
+
+const MERGE_GATE = {
+  ready: {
+    type: "noul",
+    instructions:
+      "Is this change complete and ready to merge (no missing pieces, leftovers or unrelated changes)?",
+    criteria: {
+      false: "Pieces are missing, or it has leftovers or unrelated changes",
+      true: "The change is complete and ready to merge",
+    },
+  },
+  verdict: {
+    type: "choice",
+    instructions: "What is the overall verdict on this change?",
+    criteria: {
+      approve: "Correct and ready to merge",
+      changes: "Mergeable after specific fixes",
+      reject: "Wrong approach or breaks behavior",
+    },
+  },
+};
+
+/**
+ * `ready` and `verdict` ask about merging for a diff or merge request, and about implementing
+ * for a plan, a design or no kind. Invariant questions are the same for every kind.
+ */
+export function buildGateQuestions(invariants = {}, kind) {
+  const base = kind === "diff" || kind === "mr" ? MERGE_GATE : IMPLEMENT_GATE;
+  const questions = structuredClone(base);
   for (const [id, description] of Object.entries(invariants)) {
     questions[`invariant.${id}`] = {
       type: "noul",

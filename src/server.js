@@ -169,7 +169,7 @@ export function createServer({ env = process.env, cwd = process.cwd() } = {}) {
       if (kind !== undefined) {
         state.kind = kind;
       }
-      const answers = await askSystemOne(settings, settings.model, state, buildGateQuestions(active));
+      const answers = await askSystemOne(settings, settings.model, state, buildGateQuestions(active, kind));
       const touches = computeTouchesInvariants(answers, active);
       const computed = touches ? { touches_invariants: touches } : {};
       return textResult(formatAnswers(answers, { computed, configPath: project.path }));

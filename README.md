@@ -202,6 +202,13 @@ above the base rating, and `matched` lists every rule answered "yes", including 
 below the base, e.g. `final_risk: dangerous (matched: shared-branch)`. The JSON has the same
 in `computed.final_risk.raisedBy` and `computed.final_risk.matched` (`[{id, level}]`).
 
+### `gate` wording follows `kind`
+
+With `kind: "diff"` or `kind: "mr"`, `ready` and `verdict` ask whether the change is ready
+to merge (approve = "Correct and ready to merge"). With `plan`, `design` or no `kind`, they
+ask whether the plan is concrete enough to implement. Invariant questions are the same for
+every kind.
+
 ## Development
 
 ```sh
