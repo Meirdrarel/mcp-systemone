@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   DEFAULT_WORKFLOWS,
+  answerConfidence,
   buildCheckQuestions,
   buildGateQuestions,
   buildHoldsQuestions,
@@ -10,6 +11,7 @@ import {
   computeFinalRisk,
   computeInvariantHolds,
   computeTouchesInvariants,
+  computeUncertain,
   mergeAdditions,
 } from "../src/questions.js";
 
@@ -285,4 +287,57 @@ test("computeFinalRisk fails closed on missing answers", () => {
     computeFinalRisk(risk("safe"), { x: { description: "X", level: "needs_confirm" } }),
     { level: "needs_confirm", raisedBy: ["x"], matched: [{ id: "x", level: "needs_confirm" }] },
   );
+});
+
+const RISK_Q = buildCheckQuestions().risk;
+const NOUL_Q = { type: "noul", instructions: "i", criteria: { false: "f", true: "t" } };
+const CAUSE_Q = { type: "choice", instructions: "i", criteria: { a: "A", b: "B", c: "C", d: "D" } };
+
+function choiceAnswer(probabilities) {
+  return { type: "choice", choice: Object.keys(probabilities)[0], probabilities };
+}
+
+test("answerConfidence of a choice is (sum p^2 - 1/k) / (1 - 1/k)", () => {
+  const spread = choiceAnswer({ needs_confirm: 0.4333, safe: 0.2712, dangerous: 0.2955 });
+  assert.ok(Math.abs(answerConfidence(spread, RISK_Q) - 0.0229) < 1e-4);
+  const four = choiceAnswer({ a: 0.9468, b: 0.0163, c: 0.0139, d: 0.023 });
+  assert.ok(Math.abs(answerConfidence(four, CAUSE_Q) - 0.8632) < 1e-4);
+  assert.equal(answerConfidence(choiceAnswer({ safe: 1, needs_confirm: 0, dangerous: 0 }), RISK_Q), 1);
+});
+
+test("answerConfidence of a noul is (2p - 1)^2", () => {
+  assert.ok(Math.abs(answerConfidence({ type: "noul", noul: 0.63 }, NOUL_Q) - 0.0676) < 1e-9);
+  assert.equal(answerConfidence({ type: "noul", noul: 0.5 }, NOUL_Q), 0);
+  assert.equal(answerConfidence({ type: "noul", noul: 0 }, NOUL_Q), 1);
+  assert.equal(answerConfidence({ type: "noul", noul: 1 }, NOUL_Q), 1);
+});
+
+test("answerConfidence is null for a missing or malformed answer", () => {
+  for (const answer of [
+    undefined,
+    { type: "choice", choice: "safe" },
+    choiceAnswer({ safe: 0.9, dangerous: 0.1 }),
+    choiceAnswer({ safe: "high", needs_confirm: 0, dangerous: 0 }),
+    choiceAnswer({ safe: 1.2, needs_confirm: 0, dangerous: 0 }),
+    { type: "noul", noul: "yes" },
+    { type: "noul", noul: 1.5 },
+    { type: "noul" },
+  ]) {
+    const question = answer?.type === "noul" ? NOUL_Q : RISK_Q;
+    assert.equal(answerConfidence(answer, question), null, JSON.stringify(answer));
+  }
+  assert.equal(answerConfidence({ type: "score", score: 0.5 }, { type: "score", criteria: ["a", "b"] }), null);
+});
+
+test("computeUncertain lists keys below the threshold or without a usable answer, in question order", () => {
+  const questions = { risk: RISK_Q, "rule.a": NOUL_Q, "rule.b": NOUL_Q, "rule.c": NOUL_Q };
+  const answers = {
+    risk: choiceAnswer({ needs_confirm: 0.4333, safe: 0.2712, dangerous: 0.2955 }),
+    "rule.a": { type: "noul", noul: 0.05 },
+    "rule.b": { type: "noul", noul: "?" },
+  };
+  assert.deepEqual(computeUncertain(answers, questions, 0.2), ["risk", "rule.b", "rule.c"]);
+  assert.deepEqual(computeUncertain(answers, questions, 0), ["rule.b", "rule.c"]);
+  // Exactly at the threshold is not uncertain: (2 * 0.75 - 1)^2 = 0.25.
+  assert.deepEqual(computeUncertain({ x: { type: "noul", noul: 0.75 } }, { x: NOUL_Q }, 0.25), []);
 });

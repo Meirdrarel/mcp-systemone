@@ -240,3 +240,45 @@ export function computeFinalRisk(answers, riskRules) {
   const matched = triggered.map(([id, ruleRank]) => ({ id, level: RISK_ORDER[ruleRank] }));
   return { level, raisedBy, matched };
 }
+
+function isProbability(p) {
+  return typeof p === "number" && Number.isFinite(p) && p >= 0 && p <= 1;
+}
+
+/**
+ * How concentrated an answer is, from 0 (every option equally likely) to 1 (one option certain):
+ * (sum of p^2 - 1/k) / (1 - 1/k) over the question's k options. For a noul (k = 2) this is
+ * (2p - 1)^2. It matches the `confidence` the endpoint reports for choice answers.
+ * Returns null for a missing or malformed answer, and for score questions.
+ */
+export function answerConfidence(answer, question) {
+  if (question?.type === "noul") {
+    const p = answer?.noul;
+    return isProbability(p) ? (2 * p - 1) ** 2 : null;
+  }
+  if (question?.type === "choice") {
+    const options = Object.keys(question.criteria);
+    const probabilities = options.map((option) => answer?.probabilities?.[option]);
+    if (!probabilities.every(isProbability)) {
+      return null;
+    }
+    const k = options.length;
+    const sumOfSquares = probabilities.reduce((sum, p) => sum + p * p, 0);
+    return Math.min(1, Math.max(0, (sumOfSquares - 1 / k) / (1 - 1 / k)));
+  }
+  return null;
+}
+
+/**
+ * Keys of the choice and noul questions whose answer is below `minConfidence` or unusable
+ * (fail closed), in question order. Score questions are skipped. Never changes any rating.
+ */
+export function computeUncertain(answers, questions, minConfidence) {
+  return Object.entries(questions)
+    .filter(([, question]) => question.type !== "score")
+    .filter(([key, question]) => {
+      const confidence = answerConfidence(answers[key], question);
+      return confidence === null || confidence < minConfidence;
+    })
+    .map(([key]) => key);
+}

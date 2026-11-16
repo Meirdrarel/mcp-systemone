@@ -53,6 +53,9 @@ function renderComputed(computed) {
     }
     lines.push(`final_risk: ${risk.level}${notes.length > 0 ? ` (${notes.join("; ")})` : ""}`);
   }
+  if (computed.uncertain?.length > 0) {
+    lines.push(`low confidence: ${computed.uncertain.join(", ")} (ask the user)`);
+  }
   return lines;
 }
 

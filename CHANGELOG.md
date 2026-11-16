@@ -17,6 +17,11 @@ All notable changes to this project are documented here. The format follows
   and `touches_invariants` shows each P(holds), e.g.
   `touches_invariants: yes (P=0.9; flagged: b, c; holds: b P=0.95, c P=0.2)` then `violated: c`.
 
+- `route`, `gate` and `check`: `computed.uncertain` lists the choice and yes/no answers whose
+  confidence, (Σp² − 1/k) / (1 − 1/k), is below `SYSTEMONE_MIN_CONFIDENCE` (new variable,
+  0 to 1, default 0.2), plus any missing or malformed answer, with a line
+  `low confidence: … (ask the user)`. It never changes `final_risk` or `violated`. The README
+  defines confidence.
 - `examples/mcp-systemone-wrapper.sh` and a README section for Claude Code: start the server
   with the API key from the macOS Keychain (or libsecret) and nvm's default Node, for clients
   that launch servers without a login shell. A test runs it against stubs.

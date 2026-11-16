@@ -3,6 +3,7 @@ export const DEFAULT_PATH = "/v1/systemone";
 export const DEFAULT_MODEL = "clef";
 export const DEFAULT_FAST_MODEL = "clef-flash";
 export const DEFAULT_TIMEOUT_MS = 30_000;
+export const DEFAULT_MIN_CONFIDENCE = 0.2;
 
 function nonBlank(value) {
   if (typeof value !== "string") {
@@ -29,6 +30,16 @@ function parseTimeout(raw) {
   return Number(raw);
 }
 
+function parseMinConfidence(raw) {
+  if (raw === undefined) {
+    return DEFAULT_MIN_CONFIDENCE;
+  }
+  if (!/^(?:[01](?:\.\d*)?|\.\d+)$/.test(raw) || Number(raw) > 1) {
+    throw new Error("SYSTEMONE_MIN_CONFIDENCE must be a number between 0 and 1");
+  }
+  return Number(raw);
+}
+
 /** Resolve connection settings from environment variables. Pure: takes `env` explicitly. */
 export function readSettings(env = process.env) {
   const url =
@@ -40,5 +51,6 @@ export function readSettings(env = process.env) {
     model: nonBlank(env.SYSTEMONE_MODEL) ?? DEFAULT_MODEL,
     fastModel: nonBlank(env.SYSTEMONE_FAST_MODEL) ?? DEFAULT_FAST_MODEL,
     timeoutMs: parseTimeout(nonBlank(env.SYSTEMONE_TIMEOUT_MS)),
+    minConfidence: parseMinConfidence(nonBlank(env.SYSTEMONE_MIN_CONFIDENCE)),
   };
 }

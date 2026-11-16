@@ -201,7 +201,7 @@ test("gate asks whether flagged invariants still hold, in a second request", asy
 test("gate makes no holds request when no invariant is flagged", async () => {
   const answers = {
     ready: { type: "noul", noul: 0.8 },
-    verdict: { type: "choice", choice: "approve" },
+    verdict: { type: "choice", choice: "approve", probabilities: { approve: 0.9, changes: 0.07, reject: 0.03 } },
     "invariant.a": { type: "noul", noul: 0.1 },
   };
   await withClient({ answers, config: { version: 1, invariants: { a: "A" } } }, async (client, mock) => {
@@ -280,6 +280,107 @@ test("check accepts caller risk rules", async () => {
     );
     assert.ok(mock.requests.some((r) => r.body.questions["rule.force-push"]));
     assert.ok(text.startsWith("final_risk: needs_confirm (raised by: force-push; matched: force-push)"), text);
+  });
+});
+
+function jsonOf(text) {
+  return JSON.parse(text.match(/```json\n([\s\S]*?)\n```/)[1]);
+}
+
+const SPREAD_RISK = {
+  type: "choice",
+  choice: "needs_confirm",
+  probabilities: { safe: 0.2712, needs_confirm: 0.4333, dangerous: 0.2955 },
+};
+const CLEAR_RISK = {
+  type: "choice",
+  choice: "needs_confirm",
+  probabilities: { safe: 0.05, needs_confirm: 0.9, dangerous: 0.05 },
+};
+
+test("check flags a low-confidence base risk without changing final_risk", async () => {
+  const answers = { risk: SPREAD_RISK, "rule.p": { type: "noul", noul: 0.02 } };
+  const config = { version: 1, risk_rules: { p: { description: "P", level: "dangerous" } } };
+  await withClient({ answers, config }, async (client) => {
+    const text = textOf(await client.callTool({ name: "check", arguments: { command: "git push" } }));
+    assert.ok(text.startsWith("final_risk: needs_confirm\nlow confidence: risk (ask the user)\n"), text);
+    assert.deepEqual(jsonOf(text).computed.uncertain, ["risk"]);
+    assert.equal(jsonOf(text).computed.final_risk.level, "needs_confirm");
+  });
+});
+
+test("check with confident answers has no low confidence line", async () => {
+  const answers = { risk: CLEAR_RISK, "rule.p": { type: "noul", noul: 0.02 } };
+  const config = { version: 1, risk_rules: { p: { description: "P", level: "dangerous" } } };
+  await withClient({ answers, config }, async (client) => {
+    const text = textOf(await client.callTool({ name: "check", arguments: { command: "git commit" } }));
+    assert.ok(!text.includes("low confidence"), text);
+    assert.deepEqual(jsonOf(text).computed.uncertain, []);
+  });
+});
+
+test("check lists an uncertain rule answer", async () => {
+  const answers = { risk: CLEAR_RISK, "rule.p": { type: "noul", noul: 0.4 } };
+  const config = { version: 1, risk_rules: { p: { description: "P", level: "dangerous" } } };
+  await withClient({ answers, config }, async (client) => {
+    const text = textOf(await client.callTool({ name: "check", arguments: { command: "x" } }));
+    assert.deepEqual(jsonOf(text).computed.uncertain, ["rule.p"]);
+  });
+});
+
+test("SYSTEMONE_MIN_CONFIDENCE sets the threshold", async () => {
+  const answers = { risk: SPREAD_RISK };
+  await withClient({ answers, env: { SYSTEMONE_MIN_CONFIDENCE: "0.01" } }, async (client) => {
+    const text = textOf(await client.callTool({ name: "check", arguments: { command: "git push" } }));
+    assert.deepEqual(jsonOf(text).computed.uncertain, []);
+  });
+});
+
+test("an invalid SYSTEMONE_MIN_CONFIDENCE is a tool error", async () => {
+  await withClient({ env: { SYSTEMONE_MIN_CONFIDENCE: "high" } }, async (client, mock) => {
+    const result = await client.callTool({ name: "check", arguments: { command: "ls" } });
+    assert.ok(result.isError);
+    assert.match(textOf(result), /SYSTEMONE_MIN_CONFIDENCE/);
+    assert.equal(mock.requests.length, 0);
+  });
+});
+
+test("gate lists uncertain ready, verdict, invariant and holds answers", async () => {
+  const answers = (req) =>
+    req.questions.ready
+      ? {
+          ready: { type: "noul", noul: 0.95 },
+          verdict: {
+            type: "choice",
+            choice: "approve",
+            probabilities: { approve: 0.5, changes: 0.3, reject: 0.2 },
+          },
+          "invariant.a": { type: "noul", noul: 0.02 },
+          "invariant.b": { type: "noul", noul: 0.6 },
+        }
+      : { "holds.b": { type: "noul", noul: 0.63 } };
+  const config = { version: 1, invariants: { a: "A", b: "B" } };
+  await withClient({ answers, config }, async (client) => {
+    const text = textOf(await client.callTool({ name: "gate", arguments: { artifact: "diff", kind: "diff" } }));
+    assert.deepEqual(jsonOf(text).computed.uncertain, ["verdict", "invariant.b", "holds.b"]);
+    assert.match(text, /^violated: none\nlow confidence: verdict, invariant\.b, holds\.b \(ask the user\)$/m);
+  });
+});
+
+test("route lists an uncertain workflow and never the urgency score", async () => {
+  const answers = {
+    workflow: {
+      type: "choice",
+      choice: "bugfix",
+      probabilities: { build: 0.1, bugfix: 0.3, refactor: 0.2, review: 0.1, docs: 0.1, other: 0.2 },
+    },
+    needs_clarification: { type: "noul", noul: 0.03 },
+    urgency: { type: "score", score: 0.5 },
+  };
+  await withClient({ answers }, async (client) => {
+    const text = textOf(await client.callTool({ name: "route", arguments: { request: "x" } }));
+    assert.deepEqual(jsonOf(text).computed.uncertain, ["workflow"]);
+    assert.ok(text.startsWith("low confidence: workflow (ask the user)\n"), text);
   });
 });
 

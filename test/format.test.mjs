@@ -92,6 +92,18 @@ test("holds and violated follow touches_invariants", () => {
   assert.equal(formatAnswers(answers, { computed: allHold }).split("\n")[1], "violated: none");
 });
 
+test("low confidence line follows the other computed lines", () => {
+  const answers = { risk: { type: "choice", choice: "safe" } };
+  const computed = { final_risk: { level: "safe", raisedBy: [], matched: [] }, uncertain: ["risk", "rule.x"] };
+  assert.deepEqual(formatAnswers(answers, { computed }).split("\n").slice(0, 3), [
+    "final_risk: safe",
+    "low confidence: risk, rule.x (ask the user)",
+    "risk: safe",
+  ]);
+  const sure = { final_risk: { level: "safe", raisedBy: [], matched: [] }, uncertain: [] };
+  assert.ok(!formatAnswers(answers, { computed: sure }).includes("low confidence"));
+});
+
 test("raw JSON includes computed only when present", () => {
   const answers = { x: { type: "noul", noul: 0.9 } };
   assert.equal(jsonBlock(formatAnswers(answers)).computed, undefined);

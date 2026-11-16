@@ -28,7 +28,7 @@ npm pack --dry-run   # check what would be published
 | `src/settings.js` | `SYSTEMONE_*` environment variables → connection settings. Pure (takes `env`). |
 | `src/client.js` | HTTP call to System One and its actionable error messages. |
 | `src/project-config.js` | `.systemone.json` discovery, validation, mtime cache. |
-| `src/questions.js` | Question builders, caller merge rule, computed `touches_invariants` / `violated` / `final_risk`. |
+| `src/questions.js` | Question builders, caller merge rule, computed `touches_invariants` / `violated` / `final_risk` / `uncertain`. |
 | `src/format.js` | Text output: computed lines, per-answer lines, raw JSON, `config:` footer. |
 | `test/mock_systemone.mjs` | Local mock endpoint used by all tests. |
 | `test/package.test.mjs` | Packaging: publishable `package.json`, tarball contents, bin via symlink. |

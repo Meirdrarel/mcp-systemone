@@ -67,6 +67,7 @@ Connection settings come from the environment only; secrets never go in a reposi
 | `SYSTEMONE_MODEL` | `clef` | Used by `route`, `gate`, and `decide` (default). |
 | `SYSTEMONE_FAST_MODEL` | `clef-flash` | Used by `check`, and `decide` with `model: "fast"`. |
 | `SYSTEMONE_TIMEOUT_MS` | `30000` | Positive integer. |
+| `SYSTEMONE_MIN_CONFIDENCE` | `0.2` | 0 to 1. Answers below it are listed as low confidence (see [Confidence](#confidence)). |
 | `SYSTEMONE_CONFIG` | — | Explicit path to a `.systemone.json`. |
 
 Blank values count as unset.
@@ -252,6 +253,32 @@ violated: c
 omission, a file that should have changed but is absent from the diff, can still come out as
 holding, so treat a flagged invariant that holds as "check it", not as cleared. The JSON has
 `computed.touches_invariants.holds` (`{id: P}`) and `computed.violated` (`[id]`).
+
+### Confidence
+
+Each choice answer carries probabilities over its options; each yes/no (noul) answer carries
+P(true). `route`, `gate` and `check` score how decided every choice and noul answer is:
+
+```
+confidence = (Σ pᵢ² − 1/k) / (1 − 1/k)      k = number of options
+           = (2p − 1)²                       for a yes/no answer (k = 2)
+```
+
+It is 0 when every option is equally likely and 1 when one option has all the probability,
+whatever the number of options. It is not the probability that the answer is right: P=0.82
+with the rest split between two options gives about 0.55. For choice answers it equals the
+`confidence` field the endpoint reports.
+
+Answers below `SYSTEMONE_MIN_CONFIDENCE` (default 0.2; for a yes/no answer, P between about
+0.28 and 0.72) are listed in `computed.uncertain` and on a line such as
+
+```
+low confidence: risk, holds.c (ask the user)
+```
+
+A missing or malformed answer is listed too. The list never changes `final_risk`,
+`touches_invariants` or `violated`: it tells the agent to confirm with the user before acting
+on those answers. `urgency` (a score) and `decide` answers are not scored.
 
 ## Development
 
