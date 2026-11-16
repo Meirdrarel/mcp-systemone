@@ -167,7 +167,19 @@ test("check uses the fast model and rules raise risk", async () => {
   await withClient({ answers, config }, async (client, mock) => {
     const text = textOf(await client.callTool({ name: "check", arguments: { command: "make deploy" } }));
     assert.equal(mock.requests[0].body.model, "clef-flash");
-    assert.ok(text.startsWith("final_risk: dangerous (raised by: p)"), text);
+    assert.ok(text.startsWith("final_risk: dangerous (raised by: p; matched: p)"), text);
+  });
+});
+
+test("check shows a matched rule when the base is already at its level", async () => {
+  const answers = {
+    risk: { type: "choice", choice: "dangerous" },
+    "rule.shared-branch": { type: "noul", noul: 0.965 },
+  };
+  const config = { version: 1, risk_rules: { "shared-branch": { description: "Shared branch", level: "dangerous" } } };
+  await withClient({ answers, config }, async (client) => {
+    const text = textOf(await client.callTool({ name: "check", arguments: { command: "git push --force origin main" } }));
+    assert.ok(text.startsWith("final_risk: dangerous (matched: shared-branch)"), text);
   });
 });
 
@@ -187,7 +199,7 @@ test("check accepts caller risk rules", async () => {
       }),
     );
     assert.ok(mock.requests.some((r) => r.body.questions["rule.force-push"]));
-    assert.ok(text.startsWith("final_risk: needs_confirm (raised by: force-push)"), text);
+    assert.ok(text.startsWith("final_risk: needs_confirm (raised by: force-push; matched: force-push)"), text);
   });
 });
 
@@ -306,7 +318,7 @@ test("check takes each answer only from the request that asked it", async () => 
   const config = { version: 1, risk_rules: { p: { description: "P", level: "dangerous" } } };
   await withClient({ answers, config }, async (client) => {
     const text = textOf(await client.callTool({ name: "check", arguments: { command: "x" } }));
-    assert.ok(text.startsWith("final_risk: dangerous (raised by: p)"), text);
+    assert.ok(text.startsWith("final_risk: dangerous (raised by: p; matched: p)"), text);
     assert.ok(text.includes("risk: needs_confirm"), text);
   });
 });

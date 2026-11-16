@@ -34,8 +34,14 @@ function renderComputed(computed) {
   }
   const risk = computed.final_risk;
   if (risk) {
-    const raised = risk.raisedBy.length > 0 ? ` (raised by: ${risk.raisedBy.join(", ")})` : "";
-    lines.push(`final_risk: ${risk.level}${raised}`);
+    const notes = [];
+    if (risk.raisedBy.length > 0) {
+      notes.push(`raised by: ${risk.raisedBy.join(", ")}`);
+    }
+    if (risk.matched.length > 0) {
+      notes.push(`matched: ${risk.matched.map((rule) => rule.id).join(", ")}`);
+    }
+    lines.push(`final_risk: ${risk.level}${notes.length > 0 ? ` (${notes.join("; ")})` : ""}`);
   }
   return lines;
 }

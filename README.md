@@ -197,6 +197,11 @@ rule text. Each rule is one yes/no question, asked in a second, parallel request
 a command look riskier, never safer. If the model's reply is missing an answer, `check`
 treats it as the risky case.
 
+The first line names the rules involved: `raised by` lists the rules that set `final_risk`
+above the base rating, and `matched` lists every rule answered "yes", including those at or
+below the base, e.g. `final_risk: dangerous (matched: shared-branch)`. The JSON has the same
+in `computed.final_risk.raisedBy` and `computed.final_risk.matched` (`[{id, level}]`).
+
 ## Development
 
 ```sh

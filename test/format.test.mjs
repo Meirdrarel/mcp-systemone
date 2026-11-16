@@ -54,9 +54,24 @@ test("computed lines come first", () => {
   assert.equal(touched.split("\n")[0], "touches_invariants: yes (P=0.7; flagged: b, c)");
   const untouched = formatAnswers(answers, { computed: { touches_invariants: { p: 0.2, flagged: [] } } });
   assert.equal(untouched.split("\n")[0], "touches_invariants: no (P=0.2)");
-  const raised = formatAnswers(answers, { computed: { final_risk: { level: "needs_confirm", raisedBy: ["x"] } } });
-  assert.equal(raised.split("\n")[0], "final_risk: needs_confirm (raised by: x)");
-  const plain = formatAnswers(answers, { computed: { final_risk: { level: "safe", raisedBy: [] } } });
+  const raised = formatAnswers(answers, {
+    computed: {
+      final_risk: {
+        level: "dangerous",
+        raisedBy: ["y"],
+        matched: [
+          { id: "x", level: "needs_confirm" },
+          { id: "y", level: "dangerous" },
+        ],
+      },
+    },
+  });
+  assert.equal(raised.split("\n")[0], "final_risk: dangerous (raised by: y; matched: x, y)");
+  const matchedOnly = formatAnswers(answers, {
+    computed: { final_risk: { level: "dangerous", raisedBy: [], matched: [{ id: "shared-branch", level: "dangerous" }] } },
+  });
+  assert.equal(matchedOnly.split("\n")[0], "final_risk: dangerous (matched: shared-branch)");
+  const plain = formatAnswers(answers, { computed: { final_risk: { level: "safe", raisedBy: [], matched: [] } } });
   assert.deepEqual(plain.split("\n").slice(0, 2), ["final_risk: safe", "risk: safe"]);
 });
 
@@ -64,7 +79,7 @@ test("raw JSON includes computed only when present", () => {
   const answers = { x: { type: "noul", noul: 0.9 } };
   assert.equal(jsonBlock(formatAnswers(answers)).computed, undefined);
   assert.equal(jsonBlock(formatAnswers(answers, { computed: {} })).computed, undefined);
-  const computed = { final_risk: { level: "safe", raisedBy: [] } };
+  const computed = { final_risk: { level: "safe", raisedBy: [], matched: [] } };
   const parsed = jsonBlock(formatAnswers(answers, { computed }));
   assert.deepEqual(parsed.computed, computed);
   assert.deepEqual(parsed.x, answers.x);

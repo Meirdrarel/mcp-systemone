@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `check`: `computed.final_risk.matched` lists every risk rule answered "yes" with its level,
+  including rules that did not raise the rating because the base was already at their
+  level. The first line shows them, e.g. `final_risk: dangerous (matched: shared-branch)`.
+
 ## [1.0.3] - 2026-11-16
 
 ### Added

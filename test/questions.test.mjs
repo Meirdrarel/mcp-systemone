@@ -147,27 +147,27 @@ function risk(choice) {
 }
 
 test("computeFinalRisk never lowers the base", () => {
-  assert.deepEqual(computeFinalRisk(risk("safe"), {}), { level: "safe", raisedBy: [] });
+  assert.deepEqual(computeFinalRisk(risk("safe"), {}), { level: "safe", raisedBy: [], matched: [] });
   assert.deepEqual(
     computeFinalRisk(
       { ...risk("dangerous"), "rule.x": { type: "noul", noul: 0.9 } },
       { x: { description: "X", level: "needs_confirm" } },
     ),
-    { level: "dangerous", raisedBy: [] },
+    { level: "dangerous", raisedBy: [], matched: [{ id: "x", level: "needs_confirm" }] },
   );
   assert.deepEqual(
     computeFinalRisk(
       { ...risk("safe"), "rule.x": { type: "noul", noul: 0.5 } },
       { x: { description: "X", level: "needs_confirm" } },
     ),
-    { level: "needs_confirm", raisedBy: ["x"] },
+    { level: "needs_confirm", raisedBy: ["x"], matched: [{ id: "x", level: "needs_confirm" }] },
   );
   assert.deepEqual(
     computeFinalRisk(
       { ...risk("needs_confirm"), "rule.x": { type: "noul", noul: 0.49 } },
       { x: { description: "X", level: "dangerous" } },
     ),
-    { level: "needs_confirm", raisedBy: [] },
+    { level: "needs_confirm", raisedBy: [], matched: [] },
   );
   assert.deepEqual(
     computeFinalRisk(
@@ -178,15 +178,32 @@ test("computeFinalRisk never lowers the base", () => {
       },
       { x: { description: "X", level: "needs_confirm" }, y: { description: "Y", level: "dangerous" } },
     ),
-    { level: "dangerous", raisedBy: ["y"] },
+    {
+      level: "dangerous",
+      raisedBy: ["y"],
+      matched: [
+        { id: "x", level: "needs_confirm" },
+        { id: "y", level: "dangerous" },
+      ],
+    },
+  );
+});
+
+test("computeFinalRisk lists a matched rule even when the base is already at its level", () => {
+  assert.deepEqual(
+    computeFinalRisk(
+      { ...risk("dangerous"), "rule.shared-branch": { type: "noul", noul: 0.965 } },
+      { "shared-branch": { description: "Shared branch", level: "dangerous" } },
+    ),
+    { level: "dangerous", raisedBy: [], matched: [{ id: "shared-branch", level: "dangerous" }] },
   );
 });
 
 test("computeFinalRisk fails closed on missing answers", () => {
-  assert.deepEqual(computeFinalRisk({}, {}), { level: "dangerous", raisedBy: [] });
-  assert.deepEqual(computeFinalRisk(risk("unknown"), {}), { level: "dangerous", raisedBy: [] });
+  assert.deepEqual(computeFinalRisk({}, {}), { level: "dangerous", raisedBy: [], matched: [] });
+  assert.deepEqual(computeFinalRisk(risk("unknown"), {}), { level: "dangerous", raisedBy: [], matched: [] });
   assert.deepEqual(
     computeFinalRisk(risk("safe"), { x: { description: "X", level: "needs_confirm" } }),
-    { level: "needs_confirm", raisedBy: ["x"] },
+    { level: "needs_confirm", raisedBy: ["x"], matched: [{ id: "x", level: "needs_confirm" }] },
   );
 });

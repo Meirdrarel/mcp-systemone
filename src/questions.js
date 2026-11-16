@@ -154,6 +154,8 @@ export function computeTouchesInvariants(answers, invariants) {
 /**
  * Highest of the base risk choice and the level of every triggered rule. Rules can only raise.
  * A missing or unknown base choice counts as dangerous; a missing rule answer counts as triggered.
+ * `raisedBy` lists the rules that set the final level above the base; `matched` lists every
+ * triggered rule with its level.
  */
 export function computeFinalRisk(answers, riskRules) {
   const baseChoice = answers.risk?.choice;
@@ -173,5 +175,7 @@ export function computeFinalRisk(answers, riskRules) {
     rank > RISK_ORDER.indexOf(base)
       ? triggered.filter(([, ruleRank]) => ruleRank === rank).map(([id]) => id)
       : [];
-  return { level, raisedBy };
+  // Every rule at or above the threshold, including those that did not raise the level.
+  const matched = triggered.map(([id, ruleRank]) => ({ id, level: RISK_ORDER[ruleRank] }));
+  return { level, raisedBy, matched };
 }
