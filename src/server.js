@@ -5,6 +5,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+import pkg from "../package.json" with { type: "json" };
+
 import { askSystemOne } from "./client.js";
 import { formatAnswers } from "./format.js";
 import { resolveProjectConfig } from "./project-config.js";
@@ -12,15 +14,19 @@ import {
   DEFAULT_WORKFLOWS,
   buildCheckQuestions,
   buildGateQuestions,
+  buildHoldsQuestions,
   buildRouteQuestions,
   computeFinalRisk,
+  computeInvariantHolds,
   computeTouchesInvariants,
+  computeUncertain,
   mergeAdditions,
 } from "./questions.js";
 import { readSettings } from "./settings.js";
 
 export const SERVER_NAME = "systemone";
-export const SERVER_VERSION = "1.0.2";
+// Read from package.json so `npm version` is the only place the version changes.
+export const SERVER_VERSION = pkg.version;
 
 const questionsSchema = z.record(
   z.string().min(1),
@@ -125,7 +131,7 @@ export function createServer({ env = process.env, cwd = process.cwd() } = {}) {
     "route",
     {
       description:
-        "Classify a work request into one of the project's workflows. Use when a request could be handled several ways. Returns the workflow, whether the request needs clarification first, and an urgency score. Workflows come from the project's .systemone.json (or built-in defaults); for a one-off set of options use decide.",
+        "Classify a work request into one of the project's workflows. Use when a request could be handled several ways. Returns the workflow, whether the request needs clarification first, and an urgency score. Workflows come from the project's .systemone.json (or built-in defaults); for a one-off set of options use decide. A low confidence line lists answers too uncertain to act on alone: ask the user.",
       inputSchema: z
         .object({
           request: z.string().trim().min(1).describe("The request as received from the user"),
@@ -139,13 +145,10 @@ export function createServer({ env = process.env, cwd = process.cwd() } = {}) {
       if (extra !== undefined) {
         state.context = extra;
       }
-      const answers = await askSystemOne(
-        settings,
-        settings.model,
-        state,
-        buildRouteQuestions(project.workflows ?? DEFAULT_WORKFLOWS),
-      );
-      return textResult(formatAnswers(answers, { configPath: project.path }));
+      const routeQuestions = buildRouteQuestions(project.workflows ?? DEFAULT_WORKFLOWS);
+      const answers = await askSystemOne(settings, settings.model, state, routeQuestions);
+      const computed = { uncertain: computeUncertain(answers, routeQuestions, settings.minConfidence) };
+      return textResult(formatAnswers(answers, { computed, configPath: project.path }));
     },
   );
 
@@ -153,7 +156,7 @@ export function createServer({ env = process.env, cwd = process.cwd() } = {}) {
     "gate",
     {
       description:
-        "Judge whether a plan, design, merge request or diff is ready to implement or merge. Returns readiness, a verdict (approve/changes/reject) and, when the project or the caller defines invariants, which ones the change touches.",
+        "Judge whether a plan, design, merge request or diff is ready to implement or merge. Returns readiness, a verdict (approve/changes/reject) and, when the project or the caller defines invariants, which ones the change touches and which of those no longer hold (violated). A low confidence line lists answers too uncertain to act on alone: ask the user.",
       inputSchema: z
         .object({
           artifact: z.string().trim().min(1).describe("The plan, design, or merge request text to judge"),
@@ -169,9 +172,30 @@ export function createServer({ env = process.env, cwd = process.cwd() } = {}) {
       if (kind !== undefined) {
         state.kind = kind;
       }
-      const answers = await askSystemOne(settings, settings.model, state, buildGateQuestions(active));
+      const gateQuestions = buildGateQuestions(active, kind);
+      const answers = pickAnswers(
+        await askSystemOne(settings, settings.model, state, gateQuestions),
+        Object.keys(gateQuestions),
+      );
       const touches = computeTouchesInvariants(answers, active);
       const computed = touches ? { touches_invariants: touches } : {};
+      let asked = gateQuestions;
+      // Only flagged invariants get a second question: does it still hold after the change?
+      if (touches && touches.flagged.length > 0) {
+        const holdsQuestions = buildHoldsQuestions(active, touches.flagged);
+        asked = { ...gateQuestions, ...holdsQuestions };
+        Object.assign(
+          answers,
+          pickAnswers(
+            await askSystemOne(settings, settings.model, state, holdsQuestions),
+            Object.keys(holdsQuestions),
+          ),
+        );
+        const { holds, violated } = computeInvariantHolds(answers, touches.flagged);
+        computed.touches_invariants = { ...touches, holds };
+        computed.violated = violated;
+      }
+      computed.uncertain = computeUncertain(answers, asked, settings.minConfidence);
       return textResult(formatAnswers(answers, { computed, configPath: project.path }));
     },
   );
@@ -180,7 +204,7 @@ export function createServer({ env = process.env, cwd = process.cwd() } = {}) {
     "check",
     {
       description:
-        "Rate the risk of a shell command before running it: safe, needs_confirm or dangerous. Use before commands that change files, history or remote state. Project or caller risk rules can raise the rating, never lower it; act on final_risk. Uses the fast model.",
+        "Rate the risk of a shell command before running it: safe, needs_confirm or dangerous. Use before commands that change files, history or remote state. Project or caller risk rules can raise the rating, never lower it; act on final_risk. Uses the fast model. A low confidence line lists answers too uncertain to act on alone: ask the user.",
       inputSchema: z
         .object({
           command: z.string().trim().min(1).describe("The shell command to assess"),
@@ -205,7 +229,10 @@ export function createServer({ env = process.env, cwd = process.cwd() } = {}) {
         ruleKeys.length > 0 ? askSystemOne(settings, settings.fastModel, state, ruleQuestions) : {},
       ]);
       const answers = { ...pickAnswers(baseAnswers, ["risk"]), ...pickAnswers(ruleAnswers, ruleKeys) };
-      const computed = { final_risk: computeFinalRisk(answers, active) };
+      const computed = {
+        final_risk: computeFinalRisk(answers, active),
+        uncertain: computeUncertain(answers, { risk: baseQuestion, ...ruleQuestions }, settings.minConfidence),
+      };
       return textResult(formatAnswers(answers, { computed, configPath: project.path }));
     },
   );

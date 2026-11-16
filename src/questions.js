@@ -66,27 +66,55 @@ export function buildRouteQuestions(workflows = DEFAULT_WORKFLOWS) {
   };
 }
 
-export function buildGateQuestions(invariants = {}) {
-  const questions = {
-    ready: {
-      type: "noul",
-      instructions:
-        "Is this plan or design concrete enough to implement without guessing at requirements?",
-      criteria: {
-        false: "Requirements are missing or vague",
-        true: "The plan is complete and unambiguous",
-      },
+const IMPLEMENT_GATE = {
+  ready: {
+    type: "noul",
+    instructions:
+      "Is this plan or design concrete enough to implement without guessing at requirements?",
+    criteria: {
+      false: "Requirements are missing or vague",
+      true: "The plan is complete and unambiguous",
     },
-    verdict: {
-      type: "choice",
-      instructions: "What is the overall verdict on this plan or design?",
-      criteria: {
-        approve: "Complete, consistent, ready to implement",
-        changes: "Usable but needs specific corrections first",
-        reject: "Fundamentally flawed or missing critical information",
-      },
+  },
+  verdict: {
+    type: "choice",
+    instructions: "What is the overall verdict on this plan or design?",
+    criteria: {
+      approve: "Complete, consistent, ready to implement",
+      changes: "Usable but needs specific corrections first",
+      reject: "Fundamentally flawed or missing critical information",
     },
-  };
+  },
+};
+
+const MERGE_GATE = {
+  ready: {
+    type: "noul",
+    instructions:
+      "Is this change complete and ready to merge (no missing pieces, leftovers or unrelated changes)?",
+    criteria: {
+      false: "Pieces are missing, or it has leftovers or unrelated changes",
+      true: "The change is complete and ready to merge",
+    },
+  },
+  verdict: {
+    type: "choice",
+    instructions: "What is the overall verdict on this change?",
+    criteria: {
+      approve: "Correct and ready to merge",
+      changes: "Mergeable after specific fixes",
+      reject: "Wrong approach or breaks behavior",
+    },
+  },
+};
+
+/**
+ * `ready` and `verdict` ask about merging for a diff or merge request, and about implementing
+ * for a plan, a design or no kind. Invariant questions are the same for every kind.
+ */
+export function buildGateQuestions(invariants = {}, kind) {
+  const base = kind === "diff" || kind === "mr" ? MERGE_GATE : IMPLEMENT_GATE;
+  const questions = structuredClone(base);
   for (const [id, description] of Object.entries(invariants)) {
     questions[`invariant.${id}`] = {
       type: "noul",
@@ -100,6 +128,22 @@ export function buildGateQuestions(invariants = {}) {
   return questions;
 }
 
+/** One noul per flagged invariant: does it still hold after the change? */
+export function buildHoldsQuestions(invariants, ids) {
+  const questions = {};
+  for (const id of ids) {
+    questions[`holds.${id}`] = {
+      type: "noul",
+      instructions: `After this change, does this invariant still hold: ${invariants[id]}`,
+      criteria: {
+        false: "The change breaks it or leaves it inconsistent",
+        true: "The invariant still holds",
+      },
+    };
+  }
+  return questions;
+}
+
 export function buildCheckQuestions(riskRules = {}) {
   // The base risk question is fixed: neither the project file nor the caller can reword it.
   const questions = {
@@ -107,11 +151,11 @@ export function buildCheckQuestions(riskRules = {}) {
       type: "choice",
       instructions: "Rate the risk of running this shell command in a development repository.",
       criteria: {
-        safe: "Read-only or trivially reversible: ls, git status, builds, tests",
+        safe: "Read-only or trivially reversible, and local only: ls, git status, builds, tests",
         needs_confirm:
-          "Mutates files, git history, or settings in recoverable ways: edits, commits, branch switches, installs",
+          "Mutates files, git history, or settings in recoverable ways: edits, commits, branch switches, installs, pushing to a new or existing feature branch",
         dangerous:
-          "Destructive, hard to reverse, or affects shared or remote state: rm -rf, force push, sudo, dropping databases, publishing",
+          "Destructive or hard to reverse: rm -rf, force push, push to the default or a protected branch, deleting remote branches or tags, sudo, dropping databases, publishing a release or package",
       },
     },
   };
@@ -152,8 +196,27 @@ export function computeTouchesInvariants(answers, invariants) {
 }
 
 /**
+ * P(holds) of each given invariant and the ids below the threshold. A missing or malformed
+ * answer counts as 0 (fail closed: the invariant counts as violated).
+ */
+export function computeInvariantHolds(answers, ids) {
+  const holds = {};
+  const violated = [];
+  for (const id of ids) {
+    const p = answers[`holds.${id}`]?.noul;
+    holds[id] = typeof p === "number" && Number.isFinite(p) ? p : 0;
+    if (holds[id] < THRESHOLD) {
+      violated.push(id);
+    }
+  }
+  return { holds, violated };
+}
+
+/**
  * Highest of the base risk choice and the level of every triggered rule. Rules can only raise.
  * A missing or unknown base choice counts as dangerous; a missing rule answer counts as triggered.
+ * `raisedBy` lists the rules that set the final level above the base; `matched` lists every
+ * triggered rule with its level.
  */
 export function computeFinalRisk(answers, riskRules) {
   const baseChoice = answers.risk?.choice;
@@ -173,5 +236,49 @@ export function computeFinalRisk(answers, riskRules) {
     rank > RISK_ORDER.indexOf(base)
       ? triggered.filter(([, ruleRank]) => ruleRank === rank).map(([id]) => id)
       : [];
-  return { level, raisedBy };
+  // Every rule at or above the threshold, including those that did not raise the level.
+  const matched = triggered.map(([id, ruleRank]) => ({ id, level: RISK_ORDER[ruleRank] }));
+  return { level, raisedBy, matched };
+}
+
+function isProbability(p) {
+  return typeof p === "number" && Number.isFinite(p) && p >= 0 && p <= 1;
+}
+
+/**
+ * How concentrated an answer is, from 0 (every option equally likely) to 1 (one option certain):
+ * (sum of p^2 - 1/k) / (1 - 1/k) over the question's k options. For a noul (k = 2) this is
+ * (2p - 1)^2. It matches the `confidence` the endpoint reports for choice answers.
+ * Returns null for a missing or malformed answer, and for score questions.
+ */
+export function answerConfidence(answer, question) {
+  if (question?.type === "noul") {
+    const p = answer?.noul;
+    return isProbability(p) ? (2 * p - 1) ** 2 : null;
+  }
+  if (question?.type === "choice") {
+    const options = Object.keys(question.criteria);
+    const probabilities = options.map((option) => answer?.probabilities?.[option]);
+    if (!probabilities.every(isProbability)) {
+      return null;
+    }
+    const k = options.length;
+    const sumOfSquares = probabilities.reduce((sum, p) => sum + p * p, 0);
+    return Math.min(1, Math.max(0, (sumOfSquares - 1 / k) / (1 - 1 / k)));
+  }
+  return null;
+}
+
+/**
+ * Keys of the choice and noul questions whose answer is below `minConfidence` or unusable
+ * (fail closed), in question order. Score questions are skipped. Never changes any rating.
+ */
+export function computeUncertain(answers, questions, minConfidence) {
+  return Object.entries(questions)
+    .filter(([, question]) => question.type !== "score")
+    .filter(([key, question]) => {
+      const confidence = answerConfidence(answers[key], question);
+      return confidence === null || confidence < minConfidence;
+    })
+    .map(([key]) => key);
 }

@@ -9,7 +9,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-import { createServer } from "../src/server.js";
+import { SERVER_VERSION, createServer } from "../src/server.js";
 import { startMockSystemOne } from "./mock_systemone.mjs";
 
 const DEFAULT_ANSWERS = {
@@ -66,6 +66,14 @@ function textOf(result) {
   return result.content[0].text;
 }
 
+test("the server reports the package.json version", async () => {
+  const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(SERVER_VERSION, pkg.version);
+  await withClient({}, async (client) => {
+    assert.deepEqual(client.getServerVersion(), { name: "systemone", version: pkg.version });
+  });
+});
+
 test("the server exposes exactly the four pinned tools", async () => {
   await withClient({}, async (client) => {
     const list = await client.listTools();
@@ -121,6 +129,7 @@ test("gate merges project and caller invariants", async () => {
     verdict: { type: "choice", choice: "approve" },
     "invariant.a": { type: "noul", noul: 0.1 },
     "invariant.b": { type: "noul", noul: 0.9 },
+    "holds.b": { type: "noul", noul: 0.9 },
   };
   await withClient({ answers, config: { version: 1, invariants: { a: "A" } } }, async (client, mock) => {
     const result = await client.callTool({
@@ -133,7 +142,7 @@ test("gate merges project and caller invariants", async () => {
     assert.ok(q["invariant.a"]);
     assert.ok(q["invariant.b"]);
     assert.equal(q.touches_invariants, undefined);
-    assert.ok(text.startsWith("touches_invariants: yes (P=0.9; flagged: b)"), text);
+    assert.ok(text.startsWith("touches_invariants: yes (P=0.9; flagged: b; holds: b P=0.9)\nviolated: none"), text);
   });
 });
 
@@ -143,6 +152,85 @@ test("gate without invariants omits touches_invariants", async () => {
     const text = textOf(await client.callTool({ name: "gate", arguments: { artifact: "plan" } }));
     assert.deepEqual(Object.keys(mock.requests[0].body.questions), ["ready", "verdict"]);
     assert.ok(!text.includes("touches_invariants"));
+  });
+});
+
+test("gate words its questions by kind", async () => {
+  const answers = { ready: { type: "noul", noul: 0.8 }, verdict: { type: "choice", choice: "approve" } };
+  await withClient({ answers }, async (client, mock) => {
+    await client.callTool({ name: "gate", arguments: { artifact: "diff --git a/x b/x", kind: "diff" } });
+    await client.callTool({ name: "gate", arguments: { artifact: "plan", kind: "plan" } });
+    const [diff, plan] = mock.requests.map((r) => r.body);
+    assert.equal(diff.state.kind, "diff");
+    assert.match(diff.questions.ready.instructions, /ready to merge/);
+    assert.equal(diff.questions.verdict.criteria.approve, "Correct and ready to merge");
+    assert.match(plan.questions.ready.instructions, /concrete enough to implement/);
+  });
+});
+
+test("gate asks whether flagged invariants still hold, in a second request", async () => {
+  const answers = (req) =>
+    req.questions.ready
+      ? {
+          ready: { type: "noul", noul: 0.8 },
+          verdict: { type: "choice", choice: "approve" },
+          "invariant.a": { type: "noul", noul: 0.1 },
+          "invariant.b": { type: "noul", noul: 0.9 },
+          "invariant.c": { type: "noul", noul: 0.8 },
+          "holds.c": { type: "noul", noul: 1 },
+        }
+      : {
+          "holds.b": { type: "noul", noul: 0.95 },
+          "holds.c": { type: "noul", noul: 0.2 },
+          "invariant.a": { type: "noul", noul: 0.9 },
+        };
+  const config = { version: 1, invariants: { a: "A", b: "B", c: "C" } };
+  await withClient({ answers, config }, async (client, mock) => {
+    const result = await client.callTool({ name: "gate", arguments: { artifact: "diff", kind: "diff" } });
+    const text = textOf(result);
+    assert.ok(!result.isError, text);
+    assert.equal(mock.requests.length, 2);
+    const [first, second] = mock.requests.map((r) => r.body);
+    assert.deepEqual(Object.keys(second.questions), ["holds.b", "holds.c"]);
+    assert.match(second.questions["holds.b"].instructions, /still hold: B$/);
+    assert.deepEqual(second.state, first.state);
+    assert.equal(second.model, first.model);
+    assert.ok(
+      text.startsWith("touches_invariants: yes (P=0.9; flagged: b, c; holds: b P=0.95, c P=0.2)\nviolated: c\n"),
+      text,
+    );
+    const json = JSON.parse(text.match(/```json\n([\s\S]*?)\n```/)[1]);
+    assert.deepEqual(json.computed.violated, ["c"]);
+    assert.equal(json["holds.c"].noul, 0.2);
+    assert.equal(json["invariant.a"].noul, 0.1);
+  });
+});
+
+test("gate makes no holds request when no invariant is flagged", async () => {
+  const answers = {
+    ready: { type: "noul", noul: 0.8 },
+    verdict: { type: "choice", choice: "approve", probabilities: { approve: 0.9, changes: 0.07, reject: 0.03 } },
+    "invariant.a": { type: "noul", noul: 0.1 },
+  };
+  await withClient({ answers, config: { version: 1, invariants: { a: "A" } } }, async (client, mock) => {
+    const text = textOf(await client.callTool({ name: "gate", arguments: { artifact: "plan" } }));
+    assert.equal(mock.requests.length, 1);
+    assert.ok(text.startsWith("touches_invariants: no (P=0.1)\nready:"), text);
+  });
+});
+
+test("gate counts a missing holds answer as violated", async () => {
+  const answers = (req) =>
+    req.questions.ready
+      ? {
+          ready: { type: "noul", noul: 0.8 },
+          verdict: { type: "choice", choice: "approve" },
+          "invariant.a": { type: "noul", noul: 0.9 },
+        }
+      : {};
+  await withClient({ answers, config: { version: 1, invariants: { a: "A" } } }, async (client) => {
+    const text = textOf(await client.callTool({ name: "gate", arguments: { artifact: "plan" } }));
+    assert.ok(text.startsWith("touches_invariants: yes (P=0.9; flagged: a; holds: a P=0)\nviolated: a"), text);
   });
 });
 
@@ -167,7 +255,19 @@ test("check uses the fast model and rules raise risk", async () => {
   await withClient({ answers, config }, async (client, mock) => {
     const text = textOf(await client.callTool({ name: "check", arguments: { command: "make deploy" } }));
     assert.equal(mock.requests[0].body.model, "clef-flash");
-    assert.ok(text.startsWith("final_risk: dangerous (raised by: p)"), text);
+    assert.ok(text.startsWith("final_risk: dangerous (raised by: p; matched: p)"), text);
+  });
+});
+
+test("check shows a matched rule when the base is already at its level", async () => {
+  const answers = {
+    risk: { type: "choice", choice: "dangerous" },
+    "rule.shared-branch": { type: "noul", noul: 0.965 },
+  };
+  const config = { version: 1, risk_rules: { "shared-branch": { description: "Shared branch", level: "dangerous" } } };
+  await withClient({ answers, config }, async (client) => {
+    const text = textOf(await client.callTool({ name: "check", arguments: { command: "git push --force origin main" } }));
+    assert.ok(text.startsWith("final_risk: dangerous (matched: shared-branch)"), text);
   });
 });
 
@@ -187,7 +287,108 @@ test("check accepts caller risk rules", async () => {
       }),
     );
     assert.ok(mock.requests.some((r) => r.body.questions["rule.force-push"]));
-    assert.ok(text.startsWith("final_risk: needs_confirm (raised by: force-push)"), text);
+    assert.ok(text.startsWith("final_risk: needs_confirm (raised by: force-push; matched: force-push)"), text);
+  });
+});
+
+function jsonOf(text) {
+  return JSON.parse(text.match(/```json\n([\s\S]*?)\n```/)[1]);
+}
+
+const SPREAD_RISK = {
+  type: "choice",
+  choice: "needs_confirm",
+  probabilities: { safe: 0.2712, needs_confirm: 0.4333, dangerous: 0.2955 },
+};
+const CLEAR_RISK = {
+  type: "choice",
+  choice: "needs_confirm",
+  probabilities: { safe: 0.05, needs_confirm: 0.9, dangerous: 0.05 },
+};
+
+test("check flags a low-confidence base risk without changing final_risk", async () => {
+  const answers = { risk: SPREAD_RISK, "rule.p": { type: "noul", noul: 0.02 } };
+  const config = { version: 1, risk_rules: { p: { description: "P", level: "dangerous" } } };
+  await withClient({ answers, config }, async (client) => {
+    const text = textOf(await client.callTool({ name: "check", arguments: { command: "git push" } }));
+    assert.ok(text.startsWith("final_risk: needs_confirm\nlow confidence: risk (ask the user)\n"), text);
+    assert.deepEqual(jsonOf(text).computed.uncertain, ["risk"]);
+    assert.equal(jsonOf(text).computed.final_risk.level, "needs_confirm");
+  });
+});
+
+test("check with confident answers has no low confidence line", async () => {
+  const answers = { risk: CLEAR_RISK, "rule.p": { type: "noul", noul: 0.02 } };
+  const config = { version: 1, risk_rules: { p: { description: "P", level: "dangerous" } } };
+  await withClient({ answers, config }, async (client) => {
+    const text = textOf(await client.callTool({ name: "check", arguments: { command: "git commit" } }));
+    assert.ok(!text.includes("low confidence"), text);
+    assert.deepEqual(jsonOf(text).computed.uncertain, []);
+  });
+});
+
+test("check lists an uncertain rule answer", async () => {
+  const answers = { risk: CLEAR_RISK, "rule.p": { type: "noul", noul: 0.4 } };
+  const config = { version: 1, risk_rules: { p: { description: "P", level: "dangerous" } } };
+  await withClient({ answers, config }, async (client) => {
+    const text = textOf(await client.callTool({ name: "check", arguments: { command: "x" } }));
+    assert.deepEqual(jsonOf(text).computed.uncertain, ["rule.p"]);
+  });
+});
+
+test("SYSTEMONE_MIN_CONFIDENCE sets the threshold", async () => {
+  const answers = { risk: SPREAD_RISK };
+  await withClient({ answers, env: { SYSTEMONE_MIN_CONFIDENCE: "0.01" } }, async (client) => {
+    const text = textOf(await client.callTool({ name: "check", arguments: { command: "git push" } }));
+    assert.deepEqual(jsonOf(text).computed.uncertain, []);
+  });
+});
+
+test("an invalid SYSTEMONE_MIN_CONFIDENCE is a tool error", async () => {
+  await withClient({ env: { SYSTEMONE_MIN_CONFIDENCE: "high" } }, async (client, mock) => {
+    const result = await client.callTool({ name: "check", arguments: { command: "ls" } });
+    assert.ok(result.isError);
+    assert.match(textOf(result), /SYSTEMONE_MIN_CONFIDENCE/);
+    assert.equal(mock.requests.length, 0);
+  });
+});
+
+test("gate lists uncertain ready, verdict, invariant and holds answers", async () => {
+  const answers = (req) =>
+    req.questions.ready
+      ? {
+          ready: { type: "noul", noul: 0.95 },
+          verdict: {
+            type: "choice",
+            choice: "approve",
+            probabilities: { approve: 0.5, changes: 0.3, reject: 0.2 },
+          },
+          "invariant.a": { type: "noul", noul: 0.02 },
+          "invariant.b": { type: "noul", noul: 0.6 },
+        }
+      : { "holds.b": { type: "noul", noul: 0.63 } };
+  const config = { version: 1, invariants: { a: "A", b: "B" } };
+  await withClient({ answers, config }, async (client) => {
+    const text = textOf(await client.callTool({ name: "gate", arguments: { artifact: "diff", kind: "diff" } }));
+    assert.deepEqual(jsonOf(text).computed.uncertain, ["verdict", "invariant.b", "holds.b"]);
+    assert.match(text, /^violated: none\nlow confidence: verdict, invariant\.b, holds\.b \(ask the user\)$/m);
+  });
+});
+
+test("route lists an uncertain workflow and never the urgency score", async () => {
+  const answers = {
+    workflow: {
+      type: "choice",
+      choice: "bugfix",
+      probabilities: { build: 0.1, bugfix: 0.3, refactor: 0.2, review: 0.1, docs: 0.1, other: 0.2 },
+    },
+    needs_clarification: { type: "noul", noul: 0.03 },
+    urgency: { type: "score", score: 0.5 },
+  };
+  await withClient({ answers }, async (client) => {
+    const text = textOf(await client.callTool({ name: "route", arguments: { request: "x" } }));
+    assert.deepEqual(jsonOf(text).computed.uncertain, ["workflow"]);
+    assert.ok(text.startsWith("low confidence: workflow (ask the user)\n"), text);
   });
 });
 
@@ -306,7 +507,7 @@ test("check takes each answer only from the request that asked it", async () => 
   const config = { version: 1, risk_rules: { p: { description: "P", level: "dangerous" } } };
   await withClient({ answers, config }, async (client) => {
     const text = textOf(await client.callTool({ name: "check", arguments: { command: "x" } }));
-    assert.ok(text.startsWith("final_risk: dangerous (raised by: p)"), text);
+    assert.ok(text.startsWith("final_risk: dangerous (raised by: p; matched: p)"), text);
     assert.ok(text.includes("risk: needs_confirm"), text);
   });
 });

@@ -6,7 +6,7 @@ System One model (by default `clef` and `clef-flash`):
 | Tool | Asks | Returns |
 |---|---|---|
 | `route` | Which workflow fits this request? | workflow, `needs_clarification`, urgency score |
-| `gate` | Is this plan / design / diff ready? Does it touch an invariant? | `ready`, verdict, `touches_invariants` |
+| `gate` | Is this plan / design / diff ready? Does it touch or break an invariant? | `ready`, verdict, `touches_invariants`, `violated` |
 | `check` | How risky is this shell command? | base `risk` and `final_risk` after project rules |
 | `decide` | Any typed questions you supply | one answer per question |
 
@@ -67,6 +67,7 @@ Connection settings come from the environment only; secrets never go in a reposi
 | `SYSTEMONE_MODEL` | `clef` | Used by `route`, `gate`, and `decide` (default). |
 | `SYSTEMONE_FAST_MODEL` | `clef-flash` | Used by `check`, and `decide` with `model: "fast"`. |
 | `SYSTEMONE_TIMEOUT_MS` | `30000` | Positive integer. |
+| `SYSTEMONE_MIN_CONFIDENCE` | `0.2` | 0 to 1. Answers below it are listed as low confidence (see [Confidence](#confidence)). |
 | `SYSTEMONE_CONFIG` | — | Explicit path to a `.systemone.json`. |
 
 Blank values count as unset.
@@ -97,6 +98,24 @@ claude mcp add --env SYSTEMONE_BASE_URL=https://ollama.com --env SYSTEMONE_API_K
 ```
 
 Add `--scope user` to enable it in every project.
+
+#### Key from a secret store, Node from nvm
+
+Claude Code starts the server without a login shell, so `npx` from nvm is often not on
+`PATH`, and `--env SYSTEMONE_API_KEY=<key>` stores the key in plain text in the client
+config. [`examples/mcp-systemone-wrapper.sh`](examples/mcp-systemone-wrapper.sh) handles
+both: it reads the key from the macOS Keychain (the script's comments show the Linux
+libsecret line), resolves nvm's `default` Node at each start instead of a pinned
+`~/.nvm/versions/node/vX.Y.Z`, and execs `npx -y mcp-systemone`. It stops with an error if
+the key or Node cannot be found. Copy it from the repository, then:
+
+```sh
+security add-generic-password -s systemone-api-key -a "$USER" -w   # prompts for the key
+chmod +x ~/.local/bin/mcp-systemone-wrapper.sh
+claude mcp add --scope user systemone ~/.local/bin/mcp-systemone-wrapper.sh
+```
+
+Other clients can use the same script as their `command`.
 
 ### Codex
 
@@ -196,6 +215,70 @@ rule text. Each rule is one yes/no question, asked in a second, parallel request
 "yes" with P ≥ 0.5 (`safe < needs_confirm < dangerous`). A repository or an agent can make
 a command look riskier, never safer. If the model's reply is missing an answer, `check`
 treats it as the risky case.
+
+The base levels follow reversibility. `safe` covers only local commands that read or are
+trivially reversible; read-only remote queries such as `git fetch` or `gh pr list` usually
+rate `safe` too, but a push never does. Pushing to a new or existing feature branch is
+`needs_confirm`; force pushes, pushes to the default or a protected branch, deleting remote
+branches or tags, and publishing a release or package are `dangerous`. The model only sees
+the command and its context: a bare `git push` with no context tends toward `dangerous`, so
+pass the current branch in `context`, or add a risk rule for pushes to the default branch.
+
+The first line names the rules involved: `raised by` lists the rules that set `final_risk`
+above the base rating, and `matched` lists every rule answered "yes", including those at or
+below the base, e.g. `final_risk: dangerous (matched: shared-branch)`. The JSON has the same
+in `computed.final_risk.raisedBy` and `computed.final_risk.matched` (`[{id, level}]`).
+
+### `gate` wording follows `kind`
+
+With `kind: "diff"` or `kind: "mr"`, `ready` and `verdict` ask whether the change is ready
+to merge (approve = "Correct and ready to merge"). With `plan`, `design` or no `kind`, they
+ask whether the plan is concrete enough to implement. Invariant questions are the same for
+every kind.
+
+### Touched vs. violated invariants
+
+Each invariant first gets a relevance question, `invariant.<id>`: does the change touch it?
+Those answered "yes" (P ≥ 0.5) are listed in `touches_invariants.flagged`. Only when at least
+one is flagged, `gate` sends a second request with one `holds.<id>` question per flagged
+invariant: after this change, does it still hold? `violated` lists the flagged invariants with
+P(holds) < 0.5; a missing answer counts as violated.
+
+```
+touches_invariants: yes (P=0.9; flagged: b, c; holds: b P=0.95, c P=0.2)
+violated: c
+```
+
+`violated` catches a break the artifact shows, such as an added override. A break by
+omission, a file that should have changed but is absent from the diff, can still come out as
+holding, so treat a flagged invariant that holds as "check it", not as cleared. The JSON has
+`computed.touches_invariants.holds` (`{id: P}`) and `computed.violated` (`[id]`).
+
+### Confidence
+
+Each choice answer carries probabilities over its options; each yes/no (noul) answer carries
+P(true). `route`, `gate` and `check` score how decided every choice and noul answer is:
+
+```
+confidence = (Σ pᵢ² − 1/k) / (1 − 1/k)      k = number of options
+           = (2p − 1)²                       for a yes/no answer (k = 2)
+```
+
+It is 0 when every option is equally likely and 1 when one option has all the probability,
+whatever the number of options. It is not the probability that the answer is right: P=0.82
+with the rest split between two options gives about 0.55. For choice answers it equals the
+`confidence` field the endpoint reports.
+
+Answers below `SYSTEMONE_MIN_CONFIDENCE` (default 0.2; for a yes/no answer, P between about
+0.28 and 0.72) are listed in `computed.uncertain` and on a line such as
+
+```
+low confidence: risk, holds.c (ask the user)
+```
+
+A missing or malformed answer is listed too. The list never changes `final_risk`,
+`touches_invariants` or `violated`: it tells the agent to confirm with the user before acting
+on those answers. `urgency` (a score) and `decide` answers are not scored.
 
 ## Development
 

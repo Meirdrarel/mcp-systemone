@@ -10,6 +10,7 @@ test("readSettings defaults", () => {
     model: "clef",
     fastModel: "clef-flash",
     timeoutMs: 30000,
+    minConfidence: 0.2,
   });
 });
 
@@ -21,6 +22,7 @@ test("readSettings composes base + path and reads overrides", () => {
     SYSTEMONE_MODEL: "m",
     SYSTEMONE_FAST_MODEL: "f",
     SYSTEMONE_TIMEOUT_MS: "50",
+    SYSTEMONE_MIN_CONFIDENCE: "0.35",
   });
   assert.deepEqual(s, {
     url: "https://ollama.com/v2/so",
@@ -28,6 +30,7 @@ test("readSettings composes base + path and reads overrides", () => {
     model: "m",
     fastModel: "f",
     timeoutMs: 50,
+    minConfidence: 0.35,
   });
 });
 
@@ -66,6 +69,20 @@ test("blank values fall back to defaults", () => {
     SYSTEMONE_MODEL: "",
     SYSTEMONE_FAST_MODEL: "",
     SYSTEMONE_TIMEOUT_MS: "",
+    SYSTEMONE_MIN_CONFIDENCE: " ",
   });
   assert.deepEqual(s, readSettings({}));
+});
+
+test("SYSTEMONE_MIN_CONFIDENCE accepts 0 to 1 and rejects anything else", () => {
+  assert.equal(readSettings({ SYSTEMONE_MIN_CONFIDENCE: "0" }).minConfidence, 0);
+  assert.equal(readSettings({ SYSTEMONE_MIN_CONFIDENCE: "1" }).minConfidence, 1);
+  assert.equal(readSettings({ SYSTEMONE_MIN_CONFIDENCE: ".5" }).minConfidence, 0.5);
+  for (const v of ["abc", "-0.1", "1.5", "0.2x", "NaN", "Infinity", "1e-1"]) {
+    assert.throws(
+      () => readSettings({ SYSTEMONE_MIN_CONFIDENCE: v }),
+      /SYSTEMONE_MIN_CONFIDENCE must be a number between 0 and 1/,
+      `value ${JSON.stringify(v)}`,
+    );
+  }
 });

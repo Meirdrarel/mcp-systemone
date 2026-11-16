@@ -6,6 +6,45 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `check`: `computed.final_risk.matched` lists every risk rule answered "yes" with its level,
+  including rules that did not raise the rating because the base was already at their
+  level. The first line shows them, e.g. `final_risk: dangerous (matched: shared-branch)`.
+- `gate`: flagged invariants get a second question, `holds.<id>` ("does it still hold after
+  this change?"), sent in a separate request only when at least one invariant is flagged.
+  `computed.violated` lists those with P(holds) < 0.5 (a missing answer counts as violated),
+  and `touches_invariants` shows each P(holds), e.g.
+  `touches_invariants: yes (P=0.9; flagged: b, c; holds: b P=0.95, c P=0.2)` then `violated: c`.
+
+- `route`, `gate` and `check`: `computed.uncertain` lists the choice and yes/no answers whose
+  confidence, (Σp² − 1/k) / (1 − 1/k), is below `SYSTEMONE_MIN_CONFIDENCE` (new variable,
+  0 to 1, default 0.2), plus any missing or malformed answer, with a line
+  `low confidence: … (ask the user)`. It never changes `final_risk` or `violated`. The README
+  defines confidence.
+- `examples/mcp-systemone-wrapper.sh` and a README section for Claude Code: start the server
+  with the API key from the macOS Keychain (or libsecret) and nvm's default Node, for clients
+  that launch servers without a login shell. A test runs it against stubs.
+
+### Changed
+
+- `check`: the base `risk` criteria now separate levels by reversibility instead of "affects
+  shared or remote state". `safe` is limited to local commands; pushing to a new or existing
+  feature branch is listed under `needs_confirm`; `dangerous` names force pushes, pushes to
+  the default or a protected branch, deleting remote branches or tags, and publishing a
+  release or package. Feature-branch pushes are now expected to rate `needs_confirm`, where
+  they used to lean `dangerous` (new branch) or rate `safe` (existing branch). Unknown answers
+  still count as `dangerous`, and rules can still only raise the rating.
+- `gate`: answers the model returns for questions it was not asked are dropped, as `check`
+  already does.
+- `gate`: with `kind: "diff"` or `"mr"`, the `ready` and `verdict` questions ask whether the
+  change is ready to merge instead of whether a plan is ready to implement.
+
+### Fixed
+
+- The server reported version 1.0.2 to MCP clients since 1.0.3. The version now comes from
+  `package.json`.
+
 ## [1.0.3] - 2026-11-16
 
 ### Added

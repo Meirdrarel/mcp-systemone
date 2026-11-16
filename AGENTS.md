@@ -28,12 +28,14 @@ npm pack --dry-run   # check what would be published
 | `src/settings.js` | `SYSTEMONE_*` environment variables → connection settings. Pure (takes `env`). |
 | `src/client.js` | HTTP call to System One and its actionable error messages. |
 | `src/project-config.js` | `.systemone.json` discovery, validation, mtime cache. |
-| `src/questions.js` | Question builders, caller merge rule, computed `touches_invariants` / `final_risk`. |
+| `src/questions.js` | Question builders, caller merge rule, computed `touches_invariants` / `violated` / `final_risk` / `uncertain`. |
 | `src/format.js` | Text output: computed lines, per-answer lines, raw JSON, `config:` footer. |
 | `test/mock_systemone.mjs` | Local mock endpoint used by all tests. |
 | `test/package.test.mjs` | Packaging: publishable `package.json`, tarball contents, bin via symlink. |
 | `test/smoke.mjs` | Manual live check, not part of `npm test`. |
 | `examples/.systemone.json` | Example project config; a test keeps it valid. |
+| `examples/mcp-systemone-wrapper.sh` | Example launcher (keychain key, nvm Node); not published. |
+| `test/wrapper-example.test.mjs` | Runs the launcher example against stubbed `security`, nvm and `npx`. |
 
 ## Rules that must not break
 
