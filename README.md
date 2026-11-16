@@ -98,6 +98,24 @@ claude mcp add --env SYSTEMONE_BASE_URL=https://ollama.com --env SYSTEMONE_API_K
 
 Add `--scope user` to enable it in every project.
 
+#### Key from a secret store, Node from nvm
+
+Claude Code starts the server without a login shell, so `npx` from nvm is often not on
+`PATH`, and `--env SYSTEMONE_API_KEY=<key>` stores the key in plain text in the client
+config. [`examples/mcp-systemone-wrapper.sh`](examples/mcp-systemone-wrapper.sh) handles
+both: it reads the key from the macOS Keychain (the script's comments show the Linux
+libsecret line), resolves nvm's `default` Node at each start instead of a pinned
+`~/.nvm/versions/node/vX.Y.Z`, and execs `npx -y mcp-systemone`. It stops with an error if
+the key or Node cannot be found. Copy it from the repository, then:
+
+```sh
+security add-generic-password -s systemone-api-key -a "$USER" -w   # prompts for the key
+chmod +x ~/.local/bin/mcp-systemone-wrapper.sh
+claude mcp add --scope user systemone ~/.local/bin/mcp-systemone-wrapper.sh
+```
+
+Other clients can use the same script as their `command`.
+
 ### Codex
 
 `~/.codex/config.toml`:
@@ -230,7 +248,7 @@ touches_invariants: yes (P=0.9; flagged: b, c; holds: b P=0.95, c P=0.2)
 violated: c
 ```
 
-`violated` reliably catches a break the artifact shows, such as an added override. A break by
+`violated` catches a break the artifact shows, such as an added override. A break by
 omission, a file that should have changed but is absent from the diff, can still come out as
 holding, so treat a flagged invariant that holds as "check it", not as cleared. The JSON has
 `computed.touches_invariants.holds` (`{id: P}`) and `computed.violated` (`[id]`).

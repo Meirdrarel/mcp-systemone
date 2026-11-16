@@ -17,6 +17,10 @@ All notable changes to this project are documented here. The format follows
   and `touches_invariants` shows each P(holds), e.g.
   `touches_invariants: yes (P=0.9; flagged: b, c; holds: b P=0.95, c P=0.2)` then `violated: c`.
 
+- `examples/mcp-systemone-wrapper.sh` and a README section for Claude Code: start the server
+  with the API key from the macOS Keychain (or libsecret) and nvm's default Node, for clients
+  that launch servers without a login shell. A test runs it against stubs.
+
 ### Changed
 
 - `check`: the base `risk` criteria now separate levels by reversibility instead of "affects
