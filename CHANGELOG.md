@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-11-16
+
 ### Added
 
 - `Release` workflow: pushing a `vX.Y.Z` tag tests and publishes to npm with provenance.
