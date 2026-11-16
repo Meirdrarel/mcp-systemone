@@ -299,9 +299,11 @@ A release is one commit and one annotated tag on `main`:
    `chore: release X.Y.Z`.
 4. `git tag -a vX.Y.Z -m vX.Y.Z`, then `git push origin main vX.Y.Z`.
 
-The `Release` workflow checks that the tag matches `package.json`, runs the tests and
-publishes to npm through trusted publishing, with provenance. The new version can take a few
-minutes to appear on npm after the workflow succeeds.
+The `Release` workflow checks that the tag matches `package.json` and that `CHANGELOG.md` has
+a non-empty section for the version, runs the tests, publishes to npm through trusted
+publishing with provenance, then creates the GitHub release with that section as notes
+(`scripts/release-notes.mjs`). The new version can take a few minutes to appear on npm after
+the workflow succeeds.
 
 ## Contributing
 

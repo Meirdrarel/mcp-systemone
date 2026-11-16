@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `Release` workflow: also creates the GitHub release, with the version's `CHANGELOG.md`
+  section as notes, and stops before publishing when that section is missing or empty.
+
 ## [1.1.0] - 2026-11-16
 
 ### Added

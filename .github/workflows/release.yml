@@ -1,6 +1,7 @@
 name: Release
 
-# Publishes to npm when a version tag (vX.Y.Z) is pushed. Uses npm trusted publishing
+# Publishes to npm when a version tag (vX.Y.Z) is pushed, then creates the GitHub release
+# with that version's CHANGELOG.md section as notes. Uses npm trusted publishing
 # (OIDC): no NPM_TOKEN secret. Configure it once on npmjs.com → package → Settings →
 # Trusted publisher → GitHub Actions, repository Meirdrarel/mcp-systemone, workflow release.yml.
 
@@ -9,8 +10,8 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: read
-  id-token: write
+  contents: write # create the GitHub release
+  id-token: write # npm trusted publishing
 
 jobs:
   publish:
@@ -24,6 +25,13 @@ jobs:
           cache: npm
       - name: Tag matches package.json version
         run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      # Before publishing: a version without a CHANGELOG.md section stops here.
+      - name: Release notes from CHANGELOG.md
+        run: node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/release-notes.md"
       - run: npm ci
       - run: npm test
       - run: npm publish --provenance
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"

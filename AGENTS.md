@@ -35,6 +35,8 @@ npm pack --dry-run   # check what would be published
 | `test/smoke.mjs` | Manual live check, not part of `npm test`. |
 | `examples/.systemone.json` | Example project config; a test keeps it valid. |
 | `examples/mcp-systemone-wrapper.sh` | Example launcher (keychain key, nvm Node); not published. |
+| `scripts/release-notes.mjs` | Prints a version's `CHANGELOG.md` section; the Release workflow uses it for GitHub release notes. |
+| `test/release-notes.test.mjs` | Release notes extraction and the Release workflow's step order. |
 | `test/wrapper-example.test.mjs` | Runs the launcher example against stubbed `security`, nvm and `npx`. |
 
 ## Rules that must not break
