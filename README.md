@@ -6,7 +6,7 @@ System One model (by default `clef` and `clef-flash`):
 | Tool | Asks | Returns |
 |---|---|---|
 | `route` | Which workflow fits this request? | workflow, `needs_clarification`, urgency score |
-| `gate` | Is this plan / design / diff ready? Does it touch an invariant? | `ready`, verdict, `touches_invariants` |
+| `gate` | Is this plan / design / diff ready? Does it touch or break an invariant? | `ready`, verdict, `touches_invariants`, `violated` |
 | `check` | How risky is this shell command? | base `risk` and `final_risk` after project rules |
 | `decide` | Any typed questions you supply | one answer per question |
 
@@ -216,6 +216,24 @@ With `kind: "diff"` or `kind: "mr"`, `ready` and `verdict` ask whether the chang
 to merge (approve = "Correct and ready to merge"). With `plan`, `design` or no `kind`, they
 ask whether the plan is concrete enough to implement. Invariant questions are the same for
 every kind.
+
+### Touched vs. violated invariants
+
+Each invariant first gets a relevance question, `invariant.<id>`: does the change touch it?
+Those answered "yes" (P ≥ 0.5) are listed in `touches_invariants.flagged`. Only when at least
+one is flagged, `gate` sends a second request with one `holds.<id>` question per flagged
+invariant: after this change, does it still hold? `violated` lists the flagged invariants with
+P(holds) < 0.5; a missing answer counts as violated.
+
+```
+touches_invariants: yes (P=0.9; flagged: b, c; holds: b P=0.95, c P=0.2)
+violated: c
+```
+
+`violated` reliably catches a break the artifact shows, such as an added override. A break by
+omission, a file that should have changed but is absent from the diff, can still come out as
+holding, so treat a flagged invariant that holds as "check it", not as cleared. The JSON has
+`computed.touches_invariants.holds` (`{id: P}`) and `computed.violated` (`[id]`).
 
 ## Development
 

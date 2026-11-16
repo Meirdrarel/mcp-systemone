@@ -12,8 +12,10 @@ import {
   DEFAULT_WORKFLOWS,
   buildCheckQuestions,
   buildGateQuestions,
+  buildHoldsQuestions,
   buildRouteQuestions,
   computeFinalRisk,
+  computeInvariantHolds,
   computeTouchesInvariants,
   mergeAdditions,
 } from "./questions.js";
@@ -153,7 +155,7 @@ export function createServer({ env = process.env, cwd = process.cwd() } = {}) {
     "gate",
     {
       description:
-        "Judge whether a plan, design, merge request or diff is ready to implement or merge. Returns readiness, a verdict (approve/changes/reject) and, when the project or the caller defines invariants, which ones the change touches.",
+        "Judge whether a plan, design, merge request or diff is ready to implement or merge. Returns readiness, a verdict (approve/changes/reject) and, when the project or the caller defines invariants, which ones the change touches and which of those no longer hold (violated).",
       inputSchema: z
         .object({
           artifact: z.string().trim().min(1).describe("The plan, design, or merge request text to judge"),
@@ -169,9 +171,27 @@ export function createServer({ env = process.env, cwd = process.cwd() } = {}) {
       if (kind !== undefined) {
         state.kind = kind;
       }
-      const answers = await askSystemOne(settings, settings.model, state, buildGateQuestions(active, kind));
+      const gateQuestions = buildGateQuestions(active, kind);
+      const answers = pickAnswers(
+        await askSystemOne(settings, settings.model, state, gateQuestions),
+        Object.keys(gateQuestions),
+      );
       const touches = computeTouchesInvariants(answers, active);
       const computed = touches ? { touches_invariants: touches } : {};
+      // Only flagged invariants get a second question: does it still hold after the change?
+      if (touches && touches.flagged.length > 0) {
+        const holdsQuestions = buildHoldsQuestions(active, touches.flagged);
+        Object.assign(
+          answers,
+          pickAnswers(
+            await askSystemOne(settings, settings.model, state, holdsQuestions),
+            Object.keys(holdsQuestions),
+          ),
+        );
+        const { holds, violated } = computeInvariantHolds(answers, touches.flagged);
+        computed.touches_invariants = { ...touches, holds };
+        computed.violated = violated;
+      }
       return textResult(formatAnswers(answers, { computed, configPath: project.path }));
     },
   );

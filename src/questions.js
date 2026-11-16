@@ -128,6 +128,22 @@ export function buildGateQuestions(invariants = {}, kind) {
   return questions;
 }
 
+/** One noul per flagged invariant: does it still hold after the change? */
+export function buildHoldsQuestions(invariants, ids) {
+  const questions = {};
+  for (const id of ids) {
+    questions[`holds.${id}`] = {
+      type: "noul",
+      instructions: `After this change, does this invariant still hold: ${invariants[id]}`,
+      criteria: {
+        false: "The change breaks it or leaves it inconsistent",
+        true: "The invariant still holds",
+      },
+    };
+  }
+  return questions;
+}
+
 export function buildCheckQuestions(riskRules = {}) {
   // The base risk question is fixed: neither the project file nor the caller can reword it.
   const questions = {
@@ -177,6 +193,23 @@ export function computeTouchesInvariants(answers, invariants) {
     }
   }
   return { p: max, flagged };
+}
+
+/**
+ * P(holds) of each given invariant and the ids below the threshold. A missing or malformed
+ * answer counts as 0 (fail closed: the invariant counts as violated).
+ */
+export function computeInvariantHolds(answers, ids) {
+  const holds = {};
+  const violated = [];
+  for (const id of ids) {
+    const p = answers[`holds.${id}`]?.noul;
+    holds[id] = typeof p === "number" && Number.isFinite(p) ? p : 0;
+    if (holds[id] < THRESHOLD) {
+      violated.push(id);
+    }
+  }
+  return { holds, violated };
 }
 
 /**

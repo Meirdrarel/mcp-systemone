@@ -5,8 +5,10 @@ import {
   DEFAULT_WORKFLOWS,
   buildCheckQuestions,
   buildGateQuestions,
+  buildHoldsQuestions,
   buildRouteQuestions,
   computeFinalRisk,
+  computeInvariantHolds,
   computeTouchesInvariants,
   mergeAdditions,
 } from "../src/questions.js";
@@ -123,6 +125,41 @@ test("gate adds one noul per invariant", () => {
       true: "The change touches or could break this invariant",
     },
   });
+});
+
+test("holds questions cover only the given invariant ids", () => {
+  const q = buildHoldsQuestions({ a: "A", b: "B" }, ["b"]);
+  assert.deepEqual(q, {
+    "holds.b": {
+      type: "noul",
+      instructions: "After this change, does this invariant still hold: B",
+      criteria: {
+        false: "The change breaks it or leaves it inconsistent",
+        true: "The invariant still holds",
+      },
+    },
+  });
+  assert.deepEqual(buildHoldsQuestions({ a: "A" }, []), {});
+});
+
+test("computeInvariantHolds lists invariants that no longer hold", () => {
+  const answers = {
+    "holds.a": { type: "noul", noul: 0.9 },
+    "holds.b": { type: "noul", noul: 0.2 },
+    "holds.c": { type: "noul", noul: 0.5 },
+  };
+  assert.deepEqual(computeInvariantHolds(answers, ["a", "b", "c"]), {
+    holds: { a: 0.9, b: 0.2, c: 0.5 },
+    violated: ["b"],
+  });
+  assert.deepEqual(computeInvariantHolds({}, []), { holds: {}, violated: [] });
+});
+
+test("computeInvariantHolds fails closed on missing answers", () => {
+  assert.deepEqual(
+    computeInvariantHolds({ "holds.b": { type: "noul", noul: "yes" } }, ["a", "b"]),
+    { holds: { a: 0, b: 0 }, violated: ["a", "b"] },
+  );
 });
 
 test("check keeps the fixed base risk and adds one noul per rule", () => {

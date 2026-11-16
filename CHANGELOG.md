@@ -11,6 +11,11 @@ All notable changes to this project are documented here. The format follows
 - `check`: `computed.final_risk.matched` lists every risk rule answered "yes" with its level,
   including rules that did not raise the rating because the base was already at their
   level. The first line shows them, e.g. `final_risk: dangerous (matched: shared-branch)`.
+- `gate`: flagged invariants get a second question, `holds.<id>` ("does it still hold after
+  this change?"), sent in a separate request only when at least one invariant is flagged.
+  `computed.violated` lists those with P(holds) < 0.5 (a missing answer counts as violated),
+  and `touches_invariants` shows each P(holds), e.g.
+  `touches_invariants: yes (P=0.9; flagged: b, c; holds: b P=0.95, c P=0.2)` then `violated: c`.
 
 ### Changed
 
@@ -21,6 +26,8 @@ All notable changes to this project are documented here. The format follows
   release or package. Feature-branch pushes are now expected to rate `needs_confirm`, where
   they used to lean `dangerous` (new branch) or rate `safe` (existing branch). Unknown answers
   still count as `dangerous`, and rules can still only raise the rating.
+- `gate`: answers the model returns for questions it was not asked are dropped, as `check`
+  already does.
 - `gate`: with `kind: "diff"` or `"mr"`, the `ready` and `verdict` questions ask whether the
   change is ready to merge instead of whether a plan is ready to implement.
 

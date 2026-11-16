@@ -121,6 +121,7 @@ test("gate merges project and caller invariants", async () => {
     verdict: { type: "choice", choice: "approve" },
     "invariant.a": { type: "noul", noul: 0.1 },
     "invariant.b": { type: "noul", noul: 0.9 },
+    "holds.b": { type: "noul", noul: 0.9 },
   };
   await withClient({ answers, config: { version: 1, invariants: { a: "A" } } }, async (client, mock) => {
     const result = await client.callTool({
@@ -133,7 +134,7 @@ test("gate merges project and caller invariants", async () => {
     assert.ok(q["invariant.a"]);
     assert.ok(q["invariant.b"]);
     assert.equal(q.touches_invariants, undefined);
-    assert.ok(text.startsWith("touches_invariants: yes (P=0.9; flagged: b)"), text);
+    assert.ok(text.startsWith("touches_invariants: yes (P=0.9; flagged: b; holds: b P=0.9)\nviolated: none"), text);
   });
 });
 
@@ -156,6 +157,72 @@ test("gate words its questions by kind", async () => {
     assert.match(diff.questions.ready.instructions, /ready to merge/);
     assert.equal(diff.questions.verdict.criteria.approve, "Correct and ready to merge");
     assert.match(plan.questions.ready.instructions, /concrete enough to implement/);
+  });
+});
+
+test("gate asks whether flagged invariants still hold, in a second request", async () => {
+  const answers = (req) =>
+    req.questions.ready
+      ? {
+          ready: { type: "noul", noul: 0.8 },
+          verdict: { type: "choice", choice: "approve" },
+          "invariant.a": { type: "noul", noul: 0.1 },
+          "invariant.b": { type: "noul", noul: 0.9 },
+          "invariant.c": { type: "noul", noul: 0.8 },
+          "holds.c": { type: "noul", noul: 1 },
+        }
+      : {
+          "holds.b": { type: "noul", noul: 0.95 },
+          "holds.c": { type: "noul", noul: 0.2 },
+          "invariant.a": { type: "noul", noul: 0.9 },
+        };
+  const config = { version: 1, invariants: { a: "A", b: "B", c: "C" } };
+  await withClient({ answers, config }, async (client, mock) => {
+    const result = await client.callTool({ name: "gate", arguments: { artifact: "diff", kind: "diff" } });
+    const text = textOf(result);
+    assert.ok(!result.isError, text);
+    assert.equal(mock.requests.length, 2);
+    const [first, second] = mock.requests.map((r) => r.body);
+    assert.deepEqual(Object.keys(second.questions), ["holds.b", "holds.c"]);
+    assert.match(second.questions["holds.b"].instructions, /still hold: B$/);
+    assert.deepEqual(second.state, first.state);
+    assert.equal(second.model, first.model);
+    assert.ok(
+      text.startsWith("touches_invariants: yes (P=0.9; flagged: b, c; holds: b P=0.95, c P=0.2)\nviolated: c\n"),
+      text,
+    );
+    const json = JSON.parse(text.match(/```json\n([\s\S]*?)\n```/)[1]);
+    assert.deepEqual(json.computed.violated, ["c"]);
+    assert.equal(json["holds.c"].noul, 0.2);
+    assert.equal(json["invariant.a"].noul, 0.1);
+  });
+});
+
+test("gate makes no holds request when no invariant is flagged", async () => {
+  const answers = {
+    ready: { type: "noul", noul: 0.8 },
+    verdict: { type: "choice", choice: "approve" },
+    "invariant.a": { type: "noul", noul: 0.1 },
+  };
+  await withClient({ answers, config: { version: 1, invariants: { a: "A" } } }, async (client, mock) => {
+    const text = textOf(await client.callTool({ name: "gate", arguments: { artifact: "plan" } }));
+    assert.equal(mock.requests.length, 1);
+    assert.ok(text.startsWith("touches_invariants: no (P=0.1)\nready:"), text);
+  });
+});
+
+test("gate counts a missing holds answer as violated", async () => {
+  const answers = (req) =>
+    req.questions.ready
+      ? {
+          ready: { type: "noul", noul: 0.8 },
+          verdict: { type: "choice", choice: "approve" },
+          "invariant.a": { type: "noul", noul: 0.9 },
+        }
+      : {};
+  await withClient({ answers, config: { version: 1, invariants: { a: "A" } } }, async (client) => {
+    const text = textOf(await client.callTool({ name: "gate", arguments: { artifact: "plan" } }));
+    assert.ok(text.startsWith("touches_invariants: yes (P=0.9; flagged: a; holds: a P=0)\nviolated: a"), text);
   });
 });
 

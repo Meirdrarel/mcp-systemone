@@ -30,7 +30,17 @@ function renderComputed(computed) {
   const touches = computed.touches_invariants;
   if (touches) {
     const flagged = touches.flagged.length > 0 ? `; flagged: ${touches.flagged.join(", ")}` : "";
-    lines.push(`touches_invariants: ${touches.flagged.length > 0 ? "yes" : "no"} (P=${round(touches.p)}${flagged})`);
+    const holds = touches.holds
+      ? `; holds: ${Object.entries(touches.holds)
+          .map(([id, p]) => `${id} P=${round(p)}`)
+          .join(", ")}`
+      : "";
+    lines.push(
+      `touches_invariants: ${touches.flagged.length > 0 ? "yes" : "no"} (P=${round(touches.p)}${flagged}${holds})`,
+    );
+  }
+  if (computed.violated) {
+    lines.push(`violated: ${computed.violated.length > 0 ? computed.violated.join(", ") : "none"}`);
   }
   const risk = computed.final_risk;
   if (risk) {

@@ -75,6 +75,23 @@ test("computed lines come first", () => {
   assert.deepEqual(plain.split("\n").slice(0, 2), ["final_risk: safe", "risk: safe"]);
 });
 
+test("holds and violated follow touches_invariants", () => {
+  const answers = { ready: { type: "noul", noul: 0.9 } };
+  const computed = {
+    touches_invariants: { p: 0.7, flagged: ["b", "c"], holds: { b: 0.95, c: 0.2 } },
+    violated: ["c"],
+  };
+  assert.deepEqual(formatAnswers(answers, { computed }).split("\n").slice(0, 2), [
+    "touches_invariants: yes (P=0.7; flagged: b, c; holds: b P=0.95, c P=0.2)",
+    "violated: c",
+  ]);
+  const allHold = {
+    touches_invariants: { p: 0.7, flagged: ["b"], holds: { b: 0.95 } },
+    violated: [],
+  };
+  assert.equal(formatAnswers(answers, { computed: allHold }).split("\n")[1], "violated: none");
+});
+
 test("raw JSON includes computed only when present", () => {
   const answers = { x: { type: "noul", noul: 0.9 } };
   assert.equal(jsonBlock(formatAnswers(answers)).computed, undefined);
