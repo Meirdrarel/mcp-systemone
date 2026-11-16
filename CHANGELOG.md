@@ -6,7 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `Release` workflow: pushing a `vX.Y.Z` tag tests and publishes to npm with provenance.
+
 ## [1.0.2] - 2026-11-13
+
+First version published to npm (published manually, without provenance).
+
+### Added
+
+- Published to npm as `mcp-systemone`: run it with `npx -y mcp-systemone` or install the
+  `mcp-systemone` command with `npm install -g mcp-systemone`. Agent setup examples in the
+  README use `npx`.
+- `bin/mcp-systemone.js` entry point, which also works through npm's `.bin` symlinks
+  (`node src/server.js` still works from a clone).
 
 ### Fixed
 

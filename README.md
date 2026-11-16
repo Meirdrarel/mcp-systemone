@@ -36,13 +36,23 @@ To use a hosted endpoint instead of a local server, see [Hosted Ollama](#hosted-
 
 ## Install
 
+No install step is needed: the agent setups below run the published package with
+`npx -y mcp-systemone`, which downloads it on first use.
+
+To pin it globally instead:
+
+```sh
+npm install -g mcp-systemone   # then use `mcp-systemone` as the command
+```
+
+Or run from a clone:
+
 ```sh
 git clone https://github.com/Meirdrarel/mcp-systemone.git
 cd mcp-systemone
 npm ci
+node bin/mcp-systemone.js     # stdio transport
 ```
-
-The server entry point is `src/server.js` (stdio transport).
 
 ## Configuration (environment variables)
 
@@ -70,20 +80,20 @@ SYSTEMONE_API_KEY=<your ollama.com API key>
 
 ## Agent setup
 
-Replace `/abs/path/to/mcp-systemone` with your clone's path. Add `SYSTEMONE_*` variables as needed.
+Add `SYSTEMONE_*` variables as needed. From a clone, replace `npx -y mcp-systemone` with
+`node /abs/path/to/mcp-systemone/bin/mcp-systemone.js`.
 
 ### Claude Code
 
 ```sh
-claude mcp add --transport stdio systemone \
-  -- node /abs/path/to/mcp-systemone/src/server.js
+claude mcp add --transport stdio systemone -- npx -y mcp-systemone
 ```
 
 With a hosted endpoint (keep `--transport stdio` between the `--env` pairs and the name):
 
 ```sh
 claude mcp add --env SYSTEMONE_BASE_URL=https://ollama.com --env SYSTEMONE_API_KEY=<key> \
-  --transport stdio systemone -- node /abs/path/to/mcp-systemone/src/server.js
+  --transport stdio systemone -- npx -y mcp-systemone
 ```
 
 Add `--scope user` to enable it in every project.
@@ -94,8 +104,8 @@ Add `--scope user` to enable it in every project.
 
 ```toml
 [mcp_servers.systemone]
-command = "node"
-args = ["/abs/path/to/mcp-systemone/src/server.js"]
+command = "npx"
+args = ["-y", "mcp-systemone"]
 # env = { SYSTEMONE_BASE_URL = "https://ollama.com", SYSTEMONE_API_KEY = "<key>" }
 ```
 
@@ -112,7 +122,7 @@ Codex starts the server without a shell, so `$VAR` and `~` are not expanded in `
     "servers": {
       "systemone": {
         "type": "local",
-        "command": ["node", "/abs/path/to/mcp-systemone/src/server.js"],
+        "command": ["npx", "-y", "mcp-systemone"],
         "environment": {
           "SYSTEMONE_API_KEY": "{env:SYSTEMONE_API_KEY}"
         }
@@ -193,6 +203,14 @@ treats it as the risky case.
 npm test          # unit and server tests (mock System One server, no network)
 npm run smoke     # live calls against the configured endpoint; costs tokens
 ```
+
+### Releasing
+
+1. Move the `Unreleased` changelog entries under a new version heading and commit
+   (`npm version` refuses to run with uncommitted changes).
+2. `npm version <patch|minor|major>` (bumps `package.json`, commits and tags `vX.Y.Z`).
+3. `git push --follow-tags`. The `Release` workflow runs the tests and publishes to npm
+   through trusted publishing, with provenance.
 
 ## Contributing
 

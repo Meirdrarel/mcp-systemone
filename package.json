@@ -2,16 +2,46 @@
   "name": "mcp-systemone",
   "version": "1.0.2",
   "description": "MCP server exposing route, gate, check and decide tools backed by a System One model",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "systemone",
+    "ollama",
+    "ai-agents"
+  ],
+  "homepage": "https://github.com/Meirdrarel/mcp-systemone#readme",
+  "bugs": {
+    "url": "https://github.com/Meirdrarel/mcp-systemone/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Meirdrarel/mcp-systemone.git"
+  },
   "license": "MIT OR Apache-2.0",
-  "private": true,
   "type": "module",
   "main": "src/server.js",
+  "bin": {
+    "mcp-systemone": "bin/mcp-systemone.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "examples/.systemone.json",
+    "CHANGELOG.md",
+    "LICENSE-MIT",
+    "LICENSE-APACHE"
+  ],
   "engines": {
     "node": ">=24"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "smoke": "node test/smoke.mjs"
+    "smoke": "node test/smoke.mjs",
+    "prepublishOnly": "npm test"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.0",

@@ -1,0 +1,29 @@
+name: Release
+
+# Publishes to npm when a version tag (vX.Y.Z) is pushed. Uses npm trusted publishing
+# (OIDC): no NPM_TOKEN secret. Configure it once on npmjs.com → package → Settings →
+# Trusted publisher → GitHub Actions, repository Meirdrarel/mcp-systemone, workflow release.yml.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - name: Tag matches package.json version
+        run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      - run: npm ci
+      - run: npm test
+      - run: npm publish --provenance

@@ -16,12 +16,14 @@ npm ci            # install
 npm test          # all tests (node:test, offline, ~1s)
 node --test test/questions.test.mjs   # one file
 npm run smoke     # live calls to the configured endpoint — only when asked; costs tokens
+npm pack --dry-run   # check what would be published
 ```
 
 ## Layout
 
 | Path | Role |
 |---|---|
+| `bin/mcp-systemone.js` | CLI entry point (`npx mcp-systemone`); starts the stdio server. |
 | `src/server.js` | MCP server: tool schemas and wiring. Resolves settings and project config on every call. |
 | `src/settings.js` | `SYSTEMONE_*` environment variables → connection settings. Pure (takes `env`). |
 | `src/client.js` | HTTP call to System One and its actionable error messages. |
@@ -29,6 +31,7 @@ npm run smoke     # live calls to the configured endpoint — only when asked; c
 | `src/questions.js` | Question builders, caller merge rule, computed `touches_invariants` / `final_risk`. |
 | `src/format.js` | Text output: computed lines, per-answer lines, raw JSON, `config:` footer. |
 | `test/mock_systemone.mjs` | Local mock endpoint used by all tests. |
+| `test/package.test.mjs` | Packaging: publishable `package.json`, tarball contents, bin via symlink. |
 | `test/smoke.mjs` | Manual live check, not part of `npm test`. |
 | `examples/.systemone.json` | Example project config; a test keeps it valid. |
 
