@@ -5,6 +5,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+import pkg from "../package.json" with { type: "json" };
+
 import { askSystemOne } from "./client.js";
 import { formatAnswers } from "./format.js";
 import { resolveProjectConfig } from "./project-config.js";
@@ -23,7 +25,8 @@ import {
 import { readSettings } from "./settings.js";
 
 export const SERVER_NAME = "systemone";
-export const SERVER_VERSION = "1.0.2";
+// Read from package.json so `npm version` is the only place the version changes.
+export const SERVER_VERSION = pkg.version;
 
 const questionsSchema = z.record(
   z.string().min(1),

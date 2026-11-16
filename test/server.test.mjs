@@ -9,7 +9,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-import { createServer } from "../src/server.js";
+import { SERVER_VERSION, createServer } from "../src/server.js";
 import { startMockSystemOne } from "./mock_systemone.mjs";
 
 const DEFAULT_ANSWERS = {
@@ -65,6 +65,14 @@ async function withClient({ answers = DEFAULT_ANSWERS, config, roots, env = {}, 
 function textOf(result) {
   return result.content[0].text;
 }
+
+test("the server reports the package.json version", async () => {
+  const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(SERVER_VERSION, pkg.version);
+  await withClient({}, async (client) => {
+    assert.deepEqual(client.getServerVersion(), { name: "systemone", version: pkg.version });
+  });
+});
 
 test("the server exposes exactly the four pinned tools", async () => {
   await withClient({}, async (client) => {

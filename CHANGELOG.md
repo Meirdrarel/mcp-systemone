@@ -40,6 +40,11 @@ All notable changes to this project are documented here. The format follows
 - `gate`: with `kind: "diff"` or `"mr"`, the `ready` and `verdict` questions ask whether the
   change is ready to merge instead of whether a plan is ready to implement.
 
+### Fixed
+
+- The server reported version 1.0.2 to MCP clients since 1.0.3. The version now comes from
+  `package.json`.
+
 ## [1.0.3] - 2026-11-16
 
 ### Added
