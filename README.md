@@ -289,15 +289,19 @@ npm run smoke     # live calls against the configured endpoint; costs tokens
 
 ### Releasing
 
-A release is one commit and one annotated tag on `main`:
+A release is one pull request and one annotated tag. `main` only accepts changes through
+pull requests, and a pushed `v*` tag can be neither moved nor deleted:
 
-1. On an up-to-date `main` with a clean tree, add a `## [X.Y.Z] - YYYY-MM-DD` heading right
-   under `## [Unreleased]`, so the unreleased entries move under it and `Unreleased` is empty.
+1. From an up-to-date `main` with a clean tree, create a branch `release/X.Y.Z`. Add a
+   `## [X.Y.Z] - YYYY-MM-DD` heading right under `## [Unreleased]`, so the unreleased entries
+   move under it and `Unreleased` is empty.
 2. `npm version <patch|minor|major> --no-git-tag-version` bumps `package.json` and
    `package-lock.json` without committing or tagging.
 3. `npm test`, then commit `CHANGELOG.md`, `package.json` and `package-lock.json` as
-   `chore: release X.Y.Z`.
-4. `git tag -a vX.Y.Z -m vX.Y.Z`, then `git push origin main vX.Y.Z`.
+   `chore: release X.Y.Z`, push the branch and open a pull request.
+4. Once CI passes, merge it with a merge commit.
+5. `git switch main && git pull`, then tag the merge commit with `git tag -a vX.Y.Z -m vX.Y.Z`
+   and push only the tag: `git push origin vX.Y.Z`.
 
 The `Release` workflow checks that the tag matches `package.json` and that `CHANGELOG.md` has
 a non-empty section for the version, runs the tests, publishes to npm through trusted
